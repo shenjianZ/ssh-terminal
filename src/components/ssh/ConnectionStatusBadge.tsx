@@ -1,13 +1,14 @@
 import { Badge } from '@/components/ui/badge';
 import { SessionStatus } from '@/types/ssh';
 import { cn } from '@/lib/utils';
+import { memo } from 'react';
 
 interface ConnectionStatusBadgeProps {
   status: SessionStatus;
   className?: string;
 }
 
-export function ConnectionStatusBadge({ status, className }: ConnectionStatusBadgeProps) {
+export const ConnectionStatusBadge = memo(function ConnectionStatusBadge({ status, className }: ConnectionStatusBadgeProps) {
   const statusConfig = {
     connected: { label: '已连接', className: 'badge-connected' },
     connecting: { label: '连接中', className: 'badge-connecting' },
@@ -22,4 +23,4 @@ export function ConnectionStatusBadge({ status, className }: ConnectionStatusBad
       {config.label}
     </Badge>
   );
-}
+});

@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, Filter } from 'lucide-react';
+import { memo } from 'react';
 
 interface SessionToolbarProps {
   search: string;
@@ -9,7 +10,7 @@ interface SessionToolbarProps {
   onFilterChange: (value: string) => void;
 }
 
-export function SessionToolbar({
+export const SessionToolbar = memo(function SessionToolbar({
   search,
   onSearchChange,
   filter,
@@ -53,4 +54,4 @@ export function SessionToolbar({
       </div>
     </div>
   );
-}
+});

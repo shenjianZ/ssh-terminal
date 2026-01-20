@@ -13,6 +13,10 @@ export interface SessionConfig {
   rows?: number;
   /** 是否需要持久化保存到存储 */
   persist?: boolean;
+  /** 是否启用严格的主机密钥验证（默认true） */
+  strict_host_key_checking?: boolean;
+  /** 会话分组（默认为"默认分组"） */
+  group?: string;
 }
 
 export type SessionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -41,4 +45,5 @@ export interface CreateSessionOptions {
   columns?: number;
   rows?: number;
   persist?: boolean;
+  strict_host_key_checking?: boolean;
 }

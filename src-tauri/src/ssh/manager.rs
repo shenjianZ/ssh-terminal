@@ -7,6 +7,13 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use tauri::{AppHandle, Emitter};
 use std::io::Read;
 
+// 常量定义
+const DEFAULT_ROWS: u16 = 24;
+const DEFAULT_COLS: u16 = 80;
+const PASSWORD_INPUT_DELAY_SECS: u64 = 1;
+const READ_RETRY_DELAY_MS: u64 = 100;
+const BUFFER_SIZE: usize = 8192;
+
 #[derive(Clone)]
 pub struct SSHManager {
     sessions: Arc<RwLock<HashMap<String, SSHSession>>>,
@@ -77,8 +84,8 @@ impl SSHManager {
 
         // 构建 SSH 命令
         let pty_system = native_pty_system();
-        let rows = session.config.rows.unwrap_or(24);
-        let cols = session.config.columns.unwrap_or(80);
+        let rows = session.config.rows.unwrap_or(DEFAULT_ROWS);
+        let cols = session.config.columns.unwrap_or(DEFAULT_COLS);
 
         let pty_size = PtySize {
             rows,
@@ -96,8 +103,20 @@ impl SSHManager {
         let mut cmd = CommandBuilder::new("ssh");
         cmd.arg("-p");
         cmd.arg(session.config.port.to_string());
-        cmd.arg("-o"); cmd.arg("StrictHostKeyChecking=no"); // 自动接受主机密钥
-        cmd.arg("-o"); cmd.arg("UserKnownHostsFile=/dev/null");
+
+        // 根据配置设置主机密钥验证
+        if session.config.strict_host_key_checking {
+            // 启用严格的主机密钥验证，使用no模式让SSH输出提示
+            // 前端会检测提示并弹出对话框让用户确认
+            cmd.arg("-o"); cmd.arg("StrictHostKeyChecking=no");
+            cmd.arg("-o"); cmd.arg("UserKnownHostsFile=~/.ssh/tauri_terminal_known_hosts");
+            cmd.arg("-o"); cmd.arg("VerifyHostKeyDNS=yes");
+        } else {
+            // 开发环境或测试环境可以禁用（不推荐生产环境使用）
+            cmd.arg("-o"); cmd.arg("StrictHostKeyChecking=no");
+            cmd.arg("-o"); cmd.arg("UserKnownHostsFile=/dev/null");
+        }
+
         cmd.arg(format!("{}@{}", session.config.username, session.config.host));
 
         // 设置终端类型
@@ -156,8 +175,8 @@ impl SSHManager {
             println!("Auto-sending password for session: {}", id);
             let session_clone = session.clone();
             tokio::spawn(async move {
-                // 等待 1 秒让 SSH 服务器发送密码提示
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                // 等待一段时间让 SSH 服务器发送密码提示
+                tokio::time::sleep(tokio::time::Duration::from_secs(PASSWORD_INPUT_DELAY_SECS)).await;
 
                 // 获取 PTY writer 并写入密码
                 let mut writer_guard = session_clone.pty_writer.lock().await;
@@ -182,7 +201,7 @@ impl SSHManager {
         println!("Starting reader task for session: {}", session_id);
 
         tokio::spawn(async move {
-            let mut buffer = [0u8; 8192];
+            let mut buffer = [0u8; BUFFER_SIZE];
             let mut read_count = 0;
 
             loop {
@@ -225,7 +244,7 @@ impl SSHManager {
                         Err(e) => {
                             // 读取错误，等待一小段时间后重试
                             eprintln!("Read error for session {}: {}", session_id, e);
-                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                            tokio::time::sleep(tokio::time::Duration::from_millis(READ_RETRY_DELAY_MS)).await;
                         }
                     }
                 } else {

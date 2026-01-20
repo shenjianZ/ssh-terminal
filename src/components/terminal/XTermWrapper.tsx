@@ -6,6 +6,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
+import { HostKeyConfirmDialog } from '@/components/ssh/HostKeyConfirmDialog';
 import '@xterm/xterm/css/xterm.css';
 
 interface XTermWrapperProps {
@@ -21,6 +22,14 @@ export function XTermWrapper({ sessionId, onData, onTitleChange }: XTermWrapperP
   const webglAddonRef = useRef<WebglAddon | null>(null);
   const isInitializedRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
+
+  // 主机密钥确认对话框状态
+  const [hostKeyDialog, setHostKeyDialog] = useState({
+    open: false,
+    host: '',
+    fingerprint: '',
+    keyType: '',
+  });
 
   // 从 store 获取配置
   const { config, getCurrentTheme } = useTerminalConfigStore();
@@ -108,6 +117,8 @@ export function XTermWrapper({ sessionId, onData, onTitleChange }: XTermWrapperP
 
     // 监听来自Rust的SSH输出
     let unlisten: UnlistenFn | null = null;
+    let outputBuffer = '';
+    let dialogShown = false; // 防止重复弹出对话框
 
     const setupOutputListener = async () => {
       try {
@@ -116,7 +127,34 @@ export function XTermWrapper({ sessionId, onData, onTitleChange }: XTermWrapperP
           eventName,
           (event) => {
             const data = new Uint8Array(event.payload);
+            const text = new TextDecoder().decode(data);
+
+            // 写入终端
             terminal.write(data);
+
+            // 更新缓冲区用于检测
+            outputBuffer += text;
+            if (outputBuffer.length > 2000) {
+              outputBuffer = outputBuffer.slice(-2000);
+            }
+
+            // 检测主机密钥确认提示（使用缓冲区检测）
+            if (!dialogShown && outputBuffer.includes("The authenticity of host") && outputBuffer.includes("can't be established")) {
+              // 提取主机信息
+              const hostMatch = outputBuffer.match(/The authenticity of host '([^']+)'/);
+              const fingerprintMatch = outputBuffer.match(/fingerprint is (SHA256:[^\s]+)/);
+              const keyTypeMatch = outputBuffer.match(/(ED25519|RSA|ECDSA) key fingerprint/);
+
+              if (hostMatch && fingerprintMatch && keyTypeMatch) {
+                dialogShown = true;
+                setHostKeyDialog({
+                  open: true,
+                  host: hostMatch[1],
+                  fingerprint: fingerprintMatch[1],
+                  keyType: keyTypeMatch[1],
+                });
+              }
+            }
           }
         );
       } catch (error) {
@@ -216,12 +254,38 @@ export function XTermWrapper({ sessionId, onData, onTitleChange }: XTermWrapperP
 
   // 使用动态样式，支持 padding
   return (
-    <div
-      ref={terminalRef}
-      className="w-full h-full"
-      style={{
-        padding: `${config.padding}px`,
-      }}
-    />
+    <>
+      <div
+        ref={terminalRef}
+        className="w-full h-full"
+        style={{
+          padding: `${config.padding}px`,
+        }}
+      />
+
+      {/* 主机密钥确认对话框 */}
+      <HostKeyConfirmDialog
+        open={hostKeyDialog.open}
+        onOpenChange={(open) => setHostKeyDialog({ ...hostKeyDialog, open })}
+        host={hostKeyDialog.host}
+        fingerprint={hostKeyDialog.fingerprint}
+        keyType={hostKeyDialog.keyType}
+        onConfirm={async () => {
+          // 发送 "yes" 命令
+          await invoke('ssh_write', {
+            sessionId,
+            data: new TextEncoder().encode('yes\n'),
+          });
+          setHostKeyDialog({ ...hostKeyDialog, open: false });
+          // 重置标志，允许下次连接时再次检测
+          dialogShown = false;
+        }}
+        onCancel={() => {
+          setHostKeyDialog({ ...hostKeyDialog, open: false });
+          // 重置标志
+          dialogShown = false;
+        }}
+      />
+    </>
   );
 }

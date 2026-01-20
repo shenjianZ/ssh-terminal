@@ -4,6 +4,12 @@ use std::fs;
 use std::path::PathBuf;
 use dirs::home_dir;
 use serde::{Deserialize, Serialize};
+use aes_gcm::{Aes256Gcm, Key, Nonce, KeyInit};
+use aes_gcm::aead::Aead;
+use argon2::{Argon2, PasswordHasher};
+use argon2::password_hash::SaltString;
+use secrecy::{ExposeSecret, SecretString};
+use base64::Engine;
 
 /// 会话存储结构
 #[derive(Debug, Serialize, Deserialize)]
@@ -20,6 +26,8 @@ pub struct SavedSession {
     pub port: u16,
     pub username: String,
     pub auth_method_encrypted: String, // 加密的认证信息
+    #[serde(default)] // 向后兼容：旧版本没有nonce字段
+    pub nonce: Option<String>, // AES-GCM nonce
     pub terminal_type: Option<String>,
     pub columns: Option<u16>,
     pub rows: Option<u16>,
@@ -30,6 +38,7 @@ pub struct SavedSession {
 /// 存储管理器
 pub struct Storage {
     storage_path: PathBuf,
+    encryption_key: SecretString,
 }
 
 impl Storage {
@@ -42,10 +51,52 @@ impl Storage {
             .map_err(|e| SSHError::Storage(format!("Failed to create storage directory: {}", e)))?;
 
         let storage_path = storage_dir.join("sessions.json");
+        let key_path = storage_dir.join("encryption_key");
+
+        // 生成或加载加密密钥
+        let encryption_key = Self::get_or_create_encryption_key(&key_path)?;
 
         Ok(Self {
             storage_path,
+            encryption_key,
         })
+    }
+
+    /// 获取或创建加密密钥
+    fn get_or_create_encryption_key(key_path: &PathBuf) -> Result<SecretString> {
+        if key_path.exists() {
+            // 从文件加载密钥
+            let key_content = fs::read_to_string(key_path)
+                .map_err(|e| SSHError::Storage(format!("Failed to read encryption key: {}", e)))?;
+            Ok(SecretString::new(key_content.trim().to_string()))
+        } else {
+            // 生成新密钥
+            let key: String = (0..64)
+                .map(|_| {
+                    const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                                        abcdefghijklmnopqrstuvwxyz\
+                                        0123456789";
+                    CHARSET[rand::random::<usize>() % CHARSET.len()] as char
+                })
+                .collect();
+
+            // 保存密钥到文件（设置权限）
+            fs::write(key_path, &key)
+                .map_err(|e| SSHError::Storage(format!("Failed to save encryption key: {}", e)))?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = fs::metadata(key_path)
+                    .map_err(|e| SSHError::Storage(format!("Failed to get key permissions: {}", e)))?
+                    .permissions();
+                perms.set_mode(0o600);
+                fs::set_permissions(key_path, perms)
+                    .map_err(|e| SSHError::Storage(format!("Failed to set key permissions: {}", e)))?;
+            }
+
+            Ok(SecretString::new(key))
+        }
     }
 
     /// 获取存储目录
@@ -110,13 +161,29 @@ impl Storage {
         Ok(())
     }
 
-    /// 加密会话（简化版：使用 base64 编码）
+    /// 加密会话（使用 AES-256-GCM）
     fn encrypt_session(&self, session: SessionConfig) -> Result<SavedSession> {
-        // 将 AuthMethod 序列化为 JSON，然后 base64 编码
+        // 将 AuthMethod 序列化为 JSON
         let auth_json = serde_json::to_string(&session.auth_method)
             .map_err(|e| SSHError::Crypto(format!("Failed to serialize auth method: {}", e)))?;
 
-        let auth_method_encrypted = base64::encode(&auth_json);
+        // 从密钥字符串派生 AES-256 密钥
+        let key_bytes = self.derive_key_from_password(self.encryption_key.expose_secret())?;
+        let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+
+        // 生成随机 nonce
+        let nonce_bytes: [u8; 12] = rand::random();
+        let nonce = Nonce::from_slice(&nonce_bytes);
+
+        // 加密数据
+        let cipher = Aes256Gcm::new(key);
+        let ciphertext = cipher
+            .encrypt(nonce, auth_json.as_bytes())
+            .map_err(|e| SSHError::Crypto(format!("Encryption failed: {}", e)))?;
+
+        // 编码为 base64
+        let auth_method_encrypted = base64::engine::general_purpose::STANDARD.encode(&ciphertext);
+        let nonce_encoded = base64::engine::general_purpose::STANDARD.encode(&nonce_bytes);
 
         Ok(SavedSession {
             name: session.name,
@@ -124,6 +191,7 @@ impl Storage {
             port: session.port,
             username: session.username,
             auth_method_encrypted,
+            nonce: Some(nonce_encoded),
             terminal_type: session.terminal_type,
             columns: session.columns,
             rows: session.rows,
@@ -132,15 +200,73 @@ impl Storage {
         })
     }
 
-    /// 解密会话
+    /// 从密码派生 AES-256 密钥
+    fn derive_key_from_password(&self, password: &str) -> Result<[u8; 32]> {
+        // 使用固定的salt，确保加密和解密时密钥一致
+        let salt = SaltString::from_b64("dGh1cmktdGVybWluYWwtZml4ZWQtc2FsdC0yMDI0")
+            .map_err(|e| SSHError::Crypto(format!("Failed to create salt: {}", e)))?;
+
+        let argon2 = Argon2::default();
+
+        let password_hash = argon2
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| SSHError::Crypto(format!("Key derivation failed: {}", e)))?;
+
+        // 从哈希中提取32字节作为密钥
+        let hash_output = password_hash.hash.expect("Password hash should be present");
+        let hash_bytes = hash_output.as_bytes();
+        let mut key = [0u8; 32];
+        key.copy_from_slice(&hash_bytes[..32]);
+        Ok(key)
+    }
+
+    /// 解密会话（支持旧格式 base64 和新格式 AES-256-GCM）
     fn decrypt_session(&self, saved: SavedSession) -> Result<SessionConfig> {
-        // base64 解码
-        let auth_json = base64::decode(&saved.auth_method_encrypted)
-            .map_err(|e| SSHError::Crypto(format!("Failed to decode auth method: {}", e)))?;
+        // 尝试解密
+        let plaintext = if let Some(nonce_str) = &saved.nonce {
+            // 有 nonce 字段，尝试 AES-256-GCM 解密
+            let key_bytes = self.derive_key_from_password(self.encryption_key.expose_secret())?;
+            let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
+
+            // 解码 nonce 和密文
+            let nonce_bytes = base64::engine::general_purpose::STANDARD
+                .decode(nonce_str)
+                .map_err(|e| SSHError::Crypto(format!("Failed to decode nonce: {}", e)))?;
+
+            let ciphertext = base64::engine::general_purpose::STANDARD
+                .decode(&saved.auth_method_encrypted)
+                .map_err(|e| SSHError::Crypto(format!("Failed to decode ciphertext: {}", e)))?;
+
+            // 尝试解密数据
+            let nonce = Nonce::from_slice(&nonce_bytes);
+            let cipher = Aes256Gcm::new(key);
+
+            match cipher.decrypt(nonce, ciphertext.as_ref()) {
+                Ok(data) => data,
+                Err(_) => {
+                    // 解密失败，可能是旧格式数据被错误地添加了nonce
+                    // 回退到 base64 解码
+                    println!("AES-GCM decryption failed, falling back to base64 for session: {}", saved.name);
+                    base64::engine::general_purpose::STANDARD
+                        .decode(&saved.auth_method_encrypted)
+                        .map_err(|e| SSHError::Crypto(format!("Failed to decode base64: {}", e)))?
+                }
+            }
+        } else {
+            // 没有 nonce 字段，使用 base64 解码
+            base64::engine::general_purpose::STANDARD
+                .decode(&saved.auth_method_encrypted)
+                .map_err(|e| SSHError::Crypto(format!("Failed to decode base64: {}", e)))?
+        };
 
         // 反序列化 AuthMethod
-        let auth_method = serde_json::from_slice(&auth_json)
-            .map_err(|e| SSHError::Crypto(format!("Failed to deserialize auth method: {}", e)))?;
+        let auth_method = serde_json::from_slice(&plaintext)
+            .map_err(|e| {
+                println!("Failed to deserialize auth method for session '{}': {}", saved.name, e);
+                println!("Plaintext length: {}, first 100 bytes: {:?}", plaintext.len(), &plaintext[..plaintext.len().min(100)]);
+                println!("Plaintext (as string): {}", String::from_utf8_lossy(&plaintext));
+                SSHError::Crypto(format!("Failed to deserialize auth method: {}", e))
+            })?;
 
         Ok(SessionConfig {
             name: saved.name,
@@ -152,6 +278,7 @@ impl Storage {
             columns: saved.columns,
             rows: saved.rows,
             persist: true, // 从存储加载的会话都是持久化的
+            strict_host_key_checking: true, // 默认启用严格的主机密钥验证
         })
     }
 
@@ -195,73 +322,5 @@ impl Storage {
 impl Default for Storage {
     fn default() -> Self {
         Self::new().expect("Failed to create storage")
-    }
-}
-
-// 简单的 base64 编解码模块
-mod base64 {
-    use std::u8;
-
-    pub fn encode(input: &str) -> String {
-        let bytes = input.as_bytes();
-        let mut result = String::new();
-
-        for chunk in bytes.chunks(3) {
-            let b0 = chunk[0];
-            let b1 = if chunk.len() > 1 { chunk[1] } else { 0 };
-            let b2 = if chunk.len() > 2 { chunk[2] } else { 0 };
-
-            let combined = (b0 as u32) << 16 | (b1 as u32) << 8 | (b2 as u32);
-
-            result.push(encode_char((combined >> 18) & 0x3F));
-            result.push(encode_char((combined >> 12) & 0x3F));
-            result.push(if chunk.len() > 1 { encode_char((combined >> 6) & 0x3F) } else { '=' });
-            result.push(if chunk.len() > 2 { encode_char(combined & 0x3F) } else { '=' });
-        }
-
-        result
-    }
-
-    pub fn decode(input: &str) -> Result<Vec<u8>, String> {
-        let mut result = Vec::new();
-        let chars: Vec<u8> = input.chars()
-            .map(|c| decode_char(c).ok_or(format!("Invalid base64 character: {}", c)))
-            .collect::<Result<_, _>>()?;
-
-        for chunk in chars.chunks(4) {
-            if chunk.len() < 4 {
-                return Err("Invalid base64 input length".to_string());
-            }
-
-            let c0 = chunk[0] as u32;
-            let c1 = chunk[1] as u32;
-            let c2 = chunk[2] as u32;
-            let c3 = chunk[3] as u32;
-
-            let combined = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
-
-            result.push((combined >> 16) as u8);
-            if chunk[2] != 64 { // '=' is 64 in our decode
-                result.push((combined >> 8) as u8);
-            }
-            if chunk[3] != 64 {
-                result.push(combined as u8);
-            }
-        }
-
-        Ok(result)
-    }
-
-    const fn encode_char(value: u32) -> char {
-        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        alphabet[value as usize] as char
-    }
-
-    fn decode_char(c: char) -> Option<u8> {
-        let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        if c == '=' {
-            return Some(64);
-        }
-        alphabet.iter().position(|&ch| ch == c as u8).map(|p| p as u8)
     }
 }

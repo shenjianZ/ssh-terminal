@@ -62,6 +62,7 @@ export const useSessionStore = create<SessionStore>()(
           columns: config.columns,
           rows: config.rows,
           persist: false, // 标记为临时连接，不持久化
+          strict_host_key_checking: config.strict_host_key_checking ?? true, // 默认启用严格验证
         };
 
         const sessionId = await invoke<string>('ssh_create_session', {
@@ -105,6 +106,7 @@ export const useSessionStore = create<SessionStore>()(
           columns: config.columns,
           rows: config.rows,
           persist: true, // 标记为需要持久化保存
+          strict_host_key_checking: config.strict_host_key_checking ?? true, // 默认启用严格验证
         };
 
         const sessionId = await invoke<string>('ssh_create_session', {

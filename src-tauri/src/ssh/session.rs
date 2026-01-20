@@ -21,6 +21,13 @@ pub struct SessionConfig {
     /// 是否需要持久化保存到存储
     #[serde(default)]
     pub persist: bool,
+    /// 是否启用严格的主机密钥验证
+    #[serde(default = "default_strict_host_key_checking")]
+    pub strict_host_key_checking: bool,
+}
+
+fn default_strict_host_key_checking() -> bool {
+    true // 默认启用严格的主机密钥验证
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -47,21 +54,6 @@ pub struct SessionInfo {
     pub username: String,
     pub status: SessionStatus,
     pub connected_at: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-// Writer 包装器，因为 Box<dyn Writer> 不能直接 Clone
-struct WriterWrapper {
-    writer: Option<Box<dyn std::io::Write + Send>>,
-}
-
-unsafe impl Send for WriterWrapper {}
-
-impl Clone for WriterWrapper {
-    fn clone(&self) -> Self {
-        // Writer 不能真正克隆，所以我们创建一个空副本
-        // 实际使用时会通过 Arc<Mutex<>> 共享
-        WriterWrapper { writer: None }
-    }
 }
 
 #[derive(Clone)]
@@ -118,9 +110,9 @@ impl SSHSession {
         let mut writer = self.pty_writer.lock().await;
         if let Some(ref mut w) = *writer {
             w.write_all(&data)
-                .map_err(|e| SSHError::IoError(e.to_string()))?;
+                .map_err(SSHError::IoError)?;
             w.flush()
-                .map_err(|e| SSHError::IoError(e.to_string()))?;
+                .map_err(SSHError::IoError)?;
             Ok(())
         } else {
             Err(SSHError::NotConnected)
@@ -135,7 +127,7 @@ impl SSHSession {
                 cols,
                 pixel_width: 0,
                 pixel_height: 0,
-            }).map_err(|e| SSHError::IoError(e.to_string()))?;
+            }).map_err(|e| SSHError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
             Ok(())
         } else {
             Err(SSHError::NotConnected)

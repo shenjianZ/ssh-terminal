@@ -15,10 +15,7 @@ pub enum SSHError {
     NotConnected,
 
     #[error("IO错误: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("IO错误: {0}")]
-    IoError(String),
+    IoError(#[from] std::io::Error),
 
     #[error("SSH错误: {0}")]
     Ssh(String),

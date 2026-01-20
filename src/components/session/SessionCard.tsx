@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Terminal, Trash2, Edit, Play } from 'lucide-react';
+import { Terminal, Trash2, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ConnectionStatusBadge } from '@/components/ssh/ConnectionStatusBadge';

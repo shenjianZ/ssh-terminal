@@ -6,10 +6,12 @@ import { SessionCard } from '@/components/session/SessionCard';
 import { SessionToolbar } from '@/components/session/SessionToolbar';
 import { SaveSessionDialog } from '@/components/session/SaveSessionDialog';
 import { useSessionStore } from '@/store/sessionStore';
-import { useNavigate } from 'react-router-dom';
-import { useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
+
+// 常量定义
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export function SessionManager() {
   const navigate = useNavigate();
@@ -40,7 +42,7 @@ export function SessionManager() {
     setSaveDialogOpen(true);
   };
 
-  const handleSaveSession = async (config: any) => {
+  const handleSaveSession = async (config: SessionConfig) => {
     await createSession(config);
     await loadSessions();
   };
@@ -83,7 +85,7 @@ export function SessionManager() {
 
     // 最近连接过滤（最近24小时内连接过的）
     if (activeTab === 'recent') {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const oneDayAgo = new Date(Date.now() - ONE_DAY_MS);
       filtered = filtered.filter(session => {
         if (!session.connectedAt) return false;
         const connectedDate = new Date(session.connectedAt);
@@ -96,7 +98,7 @@ export function SessionManager() {
 
   const filteredSessions = getFilteredSessions();
   const hasRecentSessions = sessions.some(s =>
-    s.connectedAt && new Date(s.connectedAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+    s.connectedAt && new Date(s.connectedAt) > new Date(Date.now() - ONE_DAY_MS)
   );
 
   return (
