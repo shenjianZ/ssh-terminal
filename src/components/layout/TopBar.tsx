@@ -1,7 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
-import { Plus, Bell, Settings } from "lucide-react";
+import { Bell } from "lucide-react";
 
 const getPageTitle = (pathname: string): string => {
   const titles: Record<string, string> = {
@@ -24,17 +24,10 @@ export function TopBar() {
 
       {/* Right Actions */}
       <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline">
-          <Plus className="h-4 w-4 mr-1" />
-          新建连接
-        </Button>
         <Button size="sm" variant="ghost">
           <Bell className="h-4 w-4" />
         </Button>
         <ModeToggle />
-        <Button size="sm" variant="ghost">
-          <Settings className="h-4 w-4" />
-        </Button>
       </div>
     </header>
   );
