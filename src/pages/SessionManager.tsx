@@ -26,9 +26,10 @@ export function SessionManager() {
       // 只在首次加载时从存储加载配置
       if (!isStorageLoaded) {
         await loadSessionsFromStorage();
+      } else {
+        // 如果已经从存储加载过，只从后端获取最新状态
+        await loadSessions();
       }
-      // 每次切换到会话管理页面时，重新从后端获取最新状态
-      await loadSessions();
     };
 
     initializeSessions();

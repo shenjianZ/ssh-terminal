@@ -201,19 +201,19 @@ export const useSessionStore = create<SessionStore>()(
       },
 
       loadSessionsFromStorage: async () => {
-        // 防止重复加载
+        // 防止重复加载 - 立即设置标志
         if (get().isStorageLoaded) {
           console.log('Storage already loaded, skipping...');
           return;
         }
 
+        // 立即标记为已加载，防止竞态条件
+        set({ isStorageLoaded: true });
+
         try {
           // 1. 先检查后端是否已有会话
           const existingSessions = await invoke<SessionInfo[]>('ssh_list_sessions');
           console.log('Existing sessions in backend:', existingSessions.length);
-
-          // 标记已加载（无论是否从存储创建）
-          set({ isStorageLoaded: true });
 
           // 如果后端已有会话，直接使用，不从存储创建
           if (existingSessions.length > 0) {
@@ -259,6 +259,8 @@ export const useSessionStore = create<SessionStore>()(
           console.log('Created and loaded sessions:', sessions);
         } catch (error) {
           console.error('Failed to load sessions from storage:', error);
+          // 如果加载失败，重置标志，允许重试
+          set({ isStorageLoaded: false });
         }
       },
 

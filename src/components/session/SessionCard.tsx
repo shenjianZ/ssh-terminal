@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Terminal, Trash2, Edit, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { ConnectionStatusBadge } from '@/components/ssh/ConnectionStatusBadge';
 import type { SessionInfo } from '@/types/ssh';
 import { useSessionStore } from '@/store/sessionStore';
 import { useTerminalStore } from '@/store/terminalStore';
@@ -26,19 +26,6 @@ export function SessionCard({ sessionId }: SessionCardProps) {
   if (!session) {
     return null;
   }
-
-  const getStatusBadge = () => {
-    switch (session.status) {
-      case 'connected':
-        return <Badge className="bg-green-500">已连接</Badge>;
-      case 'connecting':
-        return <Badge className="bg-yellow-500">连接中</Badge>;
-      case 'error':
-        return <Badge variant="destructive">错误</Badge>;
-      default:
-        return <Badge variant="secondary">未连接</Badge>;
-    }
-  };
 
   const handleConnect = async () => {
     if (session.status === 'connected') {
@@ -102,7 +89,7 @@ export function SessionCard({ sessionId }: SessionCardProps) {
             <Terminal className="h-5 w-5 text-muted-foreground" />
             <CardTitle className="text-base">{session.name}</CardTitle>
           </div>
-          {getStatusBadge()}
+          <ConnectionStatusBadge status={session.status} />
         </div>
         <div className="text-sm text-muted-foreground mt-2">
           <div>{session.username}@{session.host}:{session.port}</div>

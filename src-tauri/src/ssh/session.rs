@@ -30,6 +30,7 @@ pub enum AuthMethod {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "lowercase")]
 pub enum SessionStatus {
     Disconnected,
     Connecting,
