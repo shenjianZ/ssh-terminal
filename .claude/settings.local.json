@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "WebSearch",
+      "Bash(cargo check:*)",
+      "Bash(find:*)",
+      "Bash(xargs:*)",
+      "Bash(pnpm build:*)"
     ]
   }
 }

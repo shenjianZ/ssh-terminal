@@ -15,8 +15,6 @@ export interface SessionConfig {
   terminal_type?: string;
   columns?: number;
   rows?: number;
-  /** 是否需要持久化保存到存储 */
-  persist?: boolean;
   /** 是否启用严格的主机密钥验证（默认true） */
   strict_host_key_checking?: boolean;
   /** 会话分组（默认为"默认分组"） */
@@ -37,4 +35,6 @@ export interface SessionInfo {
   connectedAt?: string;
   error?: string;
   group: string;
+  /** 如果是连接实例，这个字段指向所属的session配置ID；如果是配置本身，这个字段为undefined */
+  connectionSessionId?: string;
 }

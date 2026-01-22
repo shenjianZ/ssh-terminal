@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Terminal as TerminalIcon, Plus, FolderOpen } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { TabBar } from '@/components/terminal/TabBar';
@@ -20,11 +19,16 @@ export function Terminal() {
   const location = useLocation();
   const [quickConnectOpen, setQuickConnectOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const { sessions, loadSessions, loadSessionsFromStorage, addSession, connectSession, disconnectSession, isStorageLoaded } = useSessionStore();
+  const { sessions, loadSessions, loadSessionsFromStorage, createTemporaryConnection, connectSession, disconnectSession, isStorageLoaded } = useSessionStore();
   const { tabs, addTab, getActiveTab } = useTerminalStore();
   const { config: terminalConfig } = useTerminalConfigStore();
 
   useEffect(() => {
+    // 只在终端页面初始化
+    if (location.pathname !== '/' && location.pathname !== '/terminal') {
+      return;
+    }
+
     const initializeSessions = async () => {
       setIsLoading(true);
       try {
@@ -45,11 +49,11 @@ export function Terminal() {
 
     // 监听tab关闭事件，自动断开连接
     const handleTabClosed = async (event: CustomEvent) => {
-      const { sessionId } = event.detail;
-      const session = sessions.find(s => s.id === sessionId);
+      const { connectionId } = event.detail;
+      const session = sessions.find(s => s.id === connectionId);
       if (session && session.status === 'connected') {
         try {
-          await disconnectSession(sessionId);
+          await disconnectSession(connectionId);
           console.log(`Disconnected session: ${session.name}`);
         } catch (error) {
           console.error('Failed to disconnect session:', error);
@@ -95,15 +99,18 @@ export function Terminal() {
       keepAliveInterval: terminalConfig.keepAliveInterval, // 使用设置的心跳间隔
     };
 
-    // 添加临时会话并创建标签页
-    const sessionId = await addSession(sessionConfig);
-    playSound(SoundEffect.TAB_OPEN);
-    addTab(sessionId, sessionConfig.name);
-
-    // 自动连接
     try {
-      await connectSession(sessionId);
+      // 直接创建临时连接并返回 connectionId
+      const connectionId = await createTemporaryConnection(sessionConfig);
+      playSound(SoundEffect.TAB_OPEN);
+
+      // 对于临时连接，connectionId 就是连接实例ID，直接连接它
+      // connectSession 会接收 connectionId，后端会识别并直接连接
+      await connectSession(connectionId);
       playSound(SoundEffect.SUCCESS);
+
+      // 使用 connectionId 添加标签页
+      addTab(connectionId, sessionConfig.name);
     } catch (error) {
       playSound(SoundEffect.ERROR);
       console.error('Failed to connect:', error);
@@ -112,7 +119,7 @@ export function Terminal() {
 
   const activeTab = getActiveTab();
   const activeSession = activeTab
-    ? sessions.find((s) => s.id === activeTab.sessionId)
+    ? sessions.find((s) => s.id === activeTab.connectionId)
     : null;
 
   return (
@@ -149,7 +156,7 @@ export function Terminal() {
       </div>
 
       {/* 终端内容区域 */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         {isLoading ? (
           // 加载状态
           <div className="flex flex-col items-center justify-center h-full bg-muted/10">
@@ -174,12 +181,9 @@ export function Terminal() {
             </div>
           </div>
         ) : activeTab && activeSession ? (
-          // 显示活动终端
-          <ErrorBoundary>
-            <XTermWrapper
-              key={activeTab.id}
-              sessionId={activeTab.sessionId}
-            />
+          // 只渲染活动标签页（但所有连接的监听器都在 store 中保持活跃）
+          <ErrorBoundary key={activeTab.connectionId}>
+            <XTermWrapper connectionId={activeTab.connectionId} />
           </ErrorBoundary>
         ) : (
           // 没有活动标签页

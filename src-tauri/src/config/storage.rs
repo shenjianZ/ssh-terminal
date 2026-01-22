@@ -312,7 +312,6 @@ impl Storage {
             terminal_type: saved.terminal_type,
             columns: saved.columns,
             rows: saved.rows,
-            persist: true, // 从存储加载的会话都是持久化的
             strict_host_key_checking: true, // 默认启用严格的主机密钥验证
             group: saved.group,
             keep_alive_interval: 30, // 默认30秒

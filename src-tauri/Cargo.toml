@@ -28,6 +28,14 @@ serde_json = "1"
 
 # SSH相关 - 直接使用系统SSH命令，无需外部库
 
+# 跨平台 SSH 实现（russh）
+russh = { version = "0.55", features = ["default"] }
+# russh-keys 通常包含在 russh 中，如果需要单独引用：
+# russh-keys = { version = "0.55", features = ["default"] }
+async-trait = "0.1"
+bytes = "1.5"
+ssh-key = "0.6"  # 用于 SSH 密钥处理
+
 # 异步运行时
 tokio = { version = "1.35", features = ["full", "net", "io-util"] }
 
@@ -39,7 +47,7 @@ anyhow = "1.0"
 thiserror = "1.0"
 dirs = "5.0"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 secrecy = "0.8"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

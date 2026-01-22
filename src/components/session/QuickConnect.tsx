@@ -26,7 +26,7 @@ export function QuickConnect({ open, onOpenChange, onConnect }: QuickConnectProp
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { addSession } = useSessionStore();
+  const { createTemporaryConnection } = useSessionStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +34,7 @@ export function QuickConnect({ open, onOpenChange, onConnect }: QuickConnectProp
     setLoading(true);
 
     try {
-      // 创建会话配置（格式需要匹配 Rust 后端的 AuthMethod enum）
+      // 创建临时连接配置（格式需要匹配 Rust 后端的 AuthMethod enum）
       const config = {
         name: `${username}@${host}`,
         host,
@@ -50,23 +50,20 @@ export function QuickConnect({ open, onOpenChange, onConnect }: QuickConnectProp
         rows: 24,
       };
 
-      console.log('Creating session with config:', config);
+      console.log('Creating temporary connection with config:', config);
 
-      // 1. 先创建会话
-      const sessionId = await addSession(config);
-      console.log('Session created with ID:', sessionId);
+      // 1. 创建临时连接（直接返回 connectionId）
+      const connectionId = await createTemporaryConnection(config);
+      console.log('Temporary connection created with ID:', connectionId);
 
-      // 2. 等待一小段时间确保 session 被添加到 store
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // 3. 尝试连接
+      // 2. 尝试连接
       try {
-        await invoke('ssh_connect', { sessionId });
+        await invoke('ssh_connect', { sessionId: connectionId });
         console.log('SSH connected successfully');
 
         // 连接成功，关闭对话框并通知
         onOpenChange(false);
-        onConnect?.(sessionId);
+        onConnect?.(connectionId);
 
         // 重置表单
         setHost('localhost');
@@ -74,16 +71,16 @@ export function QuickConnect({ open, onOpenChange, onConnect }: QuickConnectProp
         setUsername('');
         setPassword('');
       } catch (connectErr) {
-        // 连接失败，但会话已创建，仍然添加标签让用户看到错误
+        // 连接失败
         console.error('SSH connection failed:', connectErr);
         setError(`连接失败: ${connectErr}`);
 
         // 添加标签页但保持对话框打开
-        onConnect?.(sessionId);
+        onConnect?.(connectionId);
       }
     } catch (err) {
-      console.error('Failed to create session:', err);
-      setError(`创建会话失败: ${err}`);
+      console.error('Failed to create temporary connection:', err);
+      setError(`创建临时连接失败: ${err}`);
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,20 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 初始化 tracing 日志系统，关闭 russh 的调试日志
+    // 使用环境变量 RUST_LOG 控制日志级别，默认关闭 russh 的调试日志
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| {
+            tracing_subscriber::EnvFilter::new("warn") // 默认只显示 WARN 及以上级别
+                .add_directive("ssh_terminal=info".parse().unwrap()) // 我们的代码显示 INFO 及以上
+                .add_directive("russh=off".parse().unwrap()) // 完全关闭 russh 的日志
+        });
+    
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false) // 不显示模块路径
+        .init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -30,6 +44,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             // SSH会话管理命令
             commands::ssh_create_session,
+            commands::ssh_create_temporary_connection,
             commands::ssh_connect,
             commands::ssh_disconnect,
             commands::ssh_list_sessions,

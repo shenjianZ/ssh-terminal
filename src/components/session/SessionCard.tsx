@@ -18,7 +18,7 @@ interface SessionCardProps {
 export function SessionCard({ sessionId, onEdit }: SessionCardProps) {
   const [connecting, setConnecting] = useState(false);
   const navigate = useNavigate();
-  const { connectSession, disconnectSession, deleteSession, sessions } = useSessionStore();
+  const { connectSession, disconnectSession, deleteSession, sessions, createConnection } = useSessionStore();
   const { addTab } = useTerminalStore();
 
   // 从 store 中动态获取会话信息
@@ -30,19 +30,30 @@ export function SessionCard({ sessionId, onEdit }: SessionCardProps) {
 
   const handleConnect = async () => {
     if (session.status === 'connected') {
-      // 已连接，添加标签页并跳转到终端
-      playSound(SoundEffect.TAB_OPEN);
-      addTab(session.id, session.name || `${session.username}@${session.host}`);
-      navigate('/terminal');
-    } else {
-      // 未连接，先连接
+      // 已连接，创建一个新的连接实例（独立的SSH会话）
       setConnecting(true);
       try {
-        await connectSession(session.id);
+        const connectionId = await createConnection(session.id);
+        playSound(SoundEffect.SUCCESS);
+        // 添加新标签页并跳转
+        playSound(SoundEffect.TAB_OPEN);
+        addTab(connectionId, session.name || `${session.username}@${session.host}`);
+        navigate('/terminal');
+      } catch (error) {
+        playSound(SoundEffect.ERROR);
+        console.error('Failed to create connection:', error);
+      } finally {
+        setConnecting(false);
+      }
+    } else {
+      // 未连接，先连接（现在返回connectionId）
+      setConnecting(true);
+      try {
+        const connectionId = await connectSession(session.id);
         playSound(SoundEffect.SUCCESS);
         // 连接成功后添加标签页并跳转
         playSound(SoundEffect.TAB_OPEN);
-        addTab(session.id, session.name || `${session.username}@${session.host}`);
+        addTab(connectionId, session.name || `${session.username}@${session.host}`);
         navigate('/terminal');
       } catch (error) {
         playSound(SoundEffect.ERROR);

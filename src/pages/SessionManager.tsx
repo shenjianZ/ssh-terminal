@@ -27,6 +27,17 @@ export function SessionManager() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
 
+  // 只显示session配置，但显示实际的连接状态
+  const sessionConfigs = sessions.filter(s => !s.connectionSessionId).map(config => {
+    // 查找关联的连接实例
+    const connections = sessions.filter(s => s.connectionSessionId === config.id && s.status === 'connected');
+    // 如果有已连接的实例，显示连接状态
+    if (connections.length > 0) {
+      return { ...config, status: 'connected' as const };
+    }
+    return config;
+  });
+
   useEffect(() => {
     const initializeSessions = async () => {
       // 只在首次加载时从存储加载配置
@@ -38,8 +49,11 @@ export function SessionManager() {
       }
     };
 
-    initializeSessions();
-  }, [location.pathname]); // 只依赖路由变化
+    // 只在 /sessions 路由时初始化
+    if (location.pathname === '/sessions') {
+      initializeSessions();
+    }
+  }, [location.pathname, isStorageLoaded, loadSessions, loadSessionsFromStorage]);
 
   const handleNewSession = () => {
     playSound(SoundEffect.BUTTON_CLICK);
@@ -67,7 +81,7 @@ export function SessionManager() {
 
   // 过滤会话
   const getFilteredSessions = () => {
-    let filtered = sessions;
+    let filtered = sessionConfigs;
 
     // 搜索过滤
     if (search) {
@@ -97,14 +111,14 @@ export function SessionManager() {
   };
 
   const filteredSessions = getFilteredSessions();
-  const hasRecentSessions = sessions.some(s =>
+  const hasRecentSessions = sessionConfigs.some(s =>
     s.connectedAt && new Date(s.connectedAt) > new Date(Date.now() - ONE_DAY_MS)
   );
 
   // 按分组分组会话
   const getSessionsByGroup = () => {
     const grouped: Record<string, typeof filteredSessions> = {};
-    
+
     filteredSessions.forEach(session => {
       const group = session.group || '默认分组';
       if (!grouped[group]) {
@@ -112,7 +126,7 @@ export function SessionManager() {
       }
       grouped[group].push(session);
     });
-    
+
     return grouped;
   };
 
