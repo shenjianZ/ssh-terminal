@@ -156,7 +156,7 @@ export function Terminal() {
       </div>
 
       {/* 终端内容区域 */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         {isLoading ? (
           // 加载状态
           <div className="flex flex-col items-center justify-center h-full bg-muted/10">
@@ -181,12 +181,9 @@ export function Terminal() {
             </div>
           </div>
         ) : activeTab && activeSession ? (
-          // 显示活动终端（只渲染一个）
-          // 使用 connectionId 作为 key，确保每个连接对应唯一的组件实例
+          // 只渲染活动标签页（但所有连接的监听器都在 store 中保持活跃）
           <ErrorBoundary key={activeTab.connectionId}>
-            <XTermWrapper
-              connectionId={activeTab.connectionId}
-            />
+            <XTermWrapper connectionId={activeTab.connectionId} />
           </ErrorBoundary>
         ) : (
           // 没有活动标签页

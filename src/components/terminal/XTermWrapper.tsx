@@ -5,7 +5,6 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { useTerminalStore } from '@/store/terminalStore';
 import { HostKeyConfirmDialog } from '@/components/ssh/HostKeyConfirmDialog';
@@ -15,11 +14,9 @@ import '@xterm/xterm/css/xterm.css';
 interface XTermWrapperProps {
   // 每个终端标签页对应一个 connectionId（SSH 连接实例的 ID）和一个 sessionId（会话配置 ID）
   connectionId: string;
-  onData?: (data: string) => void;
-  onTitleChange?: (title: string) => void;
 }
 
-export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
+export function XTermWrapper({ connectionId }: XTermWrapperProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const terminalRefInstance = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -27,10 +24,7 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const isInitializedRef = useRef(false);
   const dialogShownRef = useRef(false);
-  const unlistenRef = useRef<UnlistenFn | null>(null); // 保存 unlisten 函数
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onDataHandlerRef = useRef<((data: string) => void) | null>(null); // 保存 onData 处理器引用
-  const onDataPropRef = useRef(onData); // 保存 onData prop 的引用
   const [isReady, setIsReady] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
   const [tempFontSize, setTempFontSize] = useState<number | null>(null);
@@ -45,7 +39,7 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
 
   // 从 store 获取配置和终端实例
   const { config, getCurrentTheme } = useTerminalConfigStore();
-  const { getTerminalInstance, setTerminalInstance } = useTerminalStore();
+  const { getTerminalInstance, setTerminalInstance, setupOutputListener, setupOnDataListener } = useTerminalStore();
   const theme = getCurrentTheme();
 
   // 初始化终端（从 store 获取或创建）
@@ -76,19 +70,28 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
       // 检查终端是否已经绑定到 DOM
       const terminalElement = (terminal as unknown as { element?: HTMLElement }).element;
       const currentContainer = terminalRef.current;
-      
+
+      console.log(`[XTermWrapper] Connection ${currentConnectionId}: terminalElement`, terminalElement?.parentNode === currentContainer ? 'already in correct container' : 'needs to be moved');
+
       // 如果终端已经打开且绑定到不同的容器，需要移动 DOM（不调用 open，避免清空内容）
       if (terminalElement && terminalElement.parentNode !== currentContainer) {
+        // 检查当前容器是否为空，如果不为空说明有其他内容
+        if (currentContainer.children.length > 0) {
+          console.warn(`[XTermWrapper] Container for ${currentConnectionId} is not empty, clearing...`);
+        }
+
         // 将终端元素移动到新容器（不调用 open，避免清空内容）
         currentContainer.innerHTML = '';
         currentContainer.appendChild(terminalElement);
-        
+
+        console.log(`[XTermWrapper] Moved terminal element for ${currentConnectionId} to new container`);
+
         // 更新 store 中的容器引用
         setTerminalInstance(currentConnectionId, {
           ...existingInstance,
           containerElement: currentContainer,
         });
-        
+
         // 重新调整大小
         if (existingInstance.fitAddon) {
           setTimeout(() => {
@@ -125,8 +128,29 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
       
       setIsReady(true);
       isInitializedRef.current = true;
-      
-      // 注意：输出监听器和窗口大小调整会在后面统一设置（对所有实例）
+
+      // 更新主机密钥检测回调（如果还没有设置）
+      if (!existingInstance.onHostKeyDetect) {
+        setTerminalInstance(currentConnectionId, {
+          ...existingInstance,
+          onHostKeyDetect: (host, fingerprint, keyType) => {
+            setHostKeyDialog({
+              open: true,
+              host,
+              fingerprint,
+              keyType,
+            });
+            dialogShownRef.current = true;
+          },
+        });
+      }
+
+      // 设置输出监听器和 onData 监听器（持久化，不依赖组件生命周期）
+      // setupOutputListener 和 setupOnDataListener 内部会检查是否已有监听器，避免重复设置
+      setupOutputListener(currentConnectionId);
+      setupOnDataListener(currentConnectionId);
+
+      // 注意：窗口大小调整会在后面统一设置（对所有实例）
     } else {
       // 创建新实例
       isInitializedRef.current = true;
@@ -210,7 +234,20 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
         fitAddon,
         searchAddon,
         webglAddon: webglAddonRef.current || undefined,
+        onHostKeyDetect: (host, fingerprint, keyType) => {
+          setHostKeyDialog({
+            open: true,
+            host,
+            fingerprint,
+            keyType,
+          });
+          dialogShownRef.current = true;
+        },
       });
+
+      // 设置输出监听器和 onData 监听器（持久化，不依赖组件生命周期）
+      setupOutputListener(currentConnectionId);
+      setupOnDataListener(currentConnectionId);
 
       // 标记终端已准备好
       setIsReady(true);
@@ -305,173 +342,6 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
     }
   }, [config, theme, isReady]);
 
-  // 更新 onData prop 的引用
-  useEffect(() => {
-    onDataPropRef.current = onData;
-  }, [onData]);
-
-  // 单独设置 onData 监听器（统一处理新实例和复用实例，避免重复绑定）
-  useEffect(() => {
-    // 确保终端实例已准备好
-    if (!isReady) return;
-
-    // 从 store 中获取终端实例（确保使用正确的 connectionId）
-    const instance = getTerminalInstance(connectionId);
-    const terminal = instance?.terminal;
-    if (!terminal) {
-      console.warn(`[XTermWrapper] Terminal instance not found for connectionId: ${connectionId}`);
-      return;
-    }
-
-    // 确保 terminalRefInstance.current 指向正确的实例
-    terminalRefInstance.current = terminal;
-
-    // 检查是否已经有 onData 处理器（避免重复绑定）
-    // 如果已经有处理器且是当前组件设置的，就不需要重新设置
-    if (instance.onDataHandler && instance.onDataHandler === onDataHandlerRef.current) {
-      console.log(`[XTermWrapper] onData listener already set for connection: ${connectionId}, skipping...`);
-      return;
-    }
-
-    // 创建新的 onData 处理器（每次 connectionId 变化时都更新，确保使用正确的 connectionId）
-    const currentConnectionId = connectionId; // 捕获当前的 connectionId
-    const onDataHandler = (data: string) => {
-      // 确保当前终端实例匹配，并且 connectionId 没有变化
-      const currentTerminal = terminalRefInstance.current;
-      const currentInstance = getTerminalInstance(currentConnectionId);
-      
-      // 双重检查：确保终端实例和 connectionId 都匹配，并且处理器仍然有效
-      if (currentTerminal === terminal && 
-          currentInstance?.terminal === terminal &&
-          currentInstance?.onDataHandler === onDataHandler) {
-        console.log(`[XTermWrapper] Writing data to connection: ${currentConnectionId}, length: ${data.length}, data: ${JSON.stringify(data)}`);
-        invoke('ssh_write', {
-          sessionId: currentConnectionId, // 后端 API 参数名是 sessionId，但值是 connectionId
-          data: new TextEncoder().encode(data),
-        }).catch((error) => {
-          console.error(`[XTermWrapper] Failed to write data to connection ${currentConnectionId}:`, error);
-        });
-        // 使用 ref 中的 onData，避免闭包问题
-        onDataPropRef.current?.(data);
-      } else {
-        console.warn(`[XTermWrapper] Terminal instance or handler mismatch, ignoring data for connection: ${currentConnectionId}`);
-      }
-    };
-    
-    // 保存处理器引用，并设置监听器（xterm.js 的 onData 会替换之前的监听器）
-    onDataHandlerRef.current = onDataHandler;
-    terminal.onData(onDataHandler);
-    
-    // 将处理器保存到 store 中，以便其他组件可以检查
-    setTerminalInstance(connectionId, {
-      ...instance,
-      onDataHandler: onDataHandler,
-    });
-    
-    console.log(`[XTermWrapper] onData listener set for connection: ${connectionId}`);
-
-    // cleanup: 注意不清除监听器，因为终端实例仍然存在
-    // 只有当标签页被关闭时，store 才会销毁实例
-    return () => {
-      // 不在这里清除 onData，因为终端实例仍然存在
-      // xterm.js 的 onData 会替换之前的监听器，所以不会有重复
-      console.log(`[XTermWrapper] onData listener cleanup for connection: ${connectionId}`);
-    };
-  }, [connectionId, isReady, getTerminalInstance, setTerminalInstance]); // 添加 setTerminalInstance 依赖
-
-  // 单独设置 SSH 输出监听器（统一处理新实例和复用实例，避免重复绑定）
-  useEffect(() => {
-    if (!isReady) return;
-
-    const currentConnectionId = connectionId;
-    let outputBuffer = '';
-    let dialogShown = false; // 防止重复弹出对话框
-    
-    // 从 store 中获取终端实例（确保使用正确的 connectionId）
-    const instance = getTerminalInstance(currentConnectionId);
-    const currentTerminal = instance?.terminal;
-    if (!currentTerminal) {
-      console.warn(`[XTermWrapper] Terminal instance not found for connectionId: ${currentConnectionId}`);
-      return;
-    }
-
-    // 确保 terminalRefInstance.current 指向正确的实例
-    terminalRefInstance.current = currentTerminal;
-
-    const setupOutputListener = async () => {
-      try {
-        // 先清理旧的监听器（如果存在）
-        if (unlistenRef.current) {
-          console.log(`[XTermWrapper] Cleaning up old listener for: ${currentConnectionId}`);
-          unlistenRef.current();
-          unlistenRef.current = null;
-        }
-
-        // 后端事件使用 connectionId 作为标识符：ssh-output-{connectionId}
-        const eventName = `ssh-output-${currentConnectionId}`;
-        console.log(`[XTermWrapper] Setting up listener for event: ${eventName}`);
-        const unlisten = await listen<number[]>(
-          eventName,
-          (event) => {
-            const data = new Uint8Array(event.payload);
-            const text = new TextDecoder().decode(data);
-            console.log(`[XTermWrapper] Received ${data.length} bytes for ${currentConnectionId}: ${text.substring(0, 50)}...`);
-
-            // 写入终端（确保使用正确的终端实例和 connectionId）
-            const instance = getTerminalInstance(currentConnectionId);
-            const terminal = instance?.terminal;
-            if (terminal === currentTerminal && terminal) {
-              terminal.write(data);
-            } else {
-              console.warn(`[XTermWrapper] Terminal instance mismatch, ignoring output for ${currentConnectionId}`);
-            }
-
-            // 更新缓冲区用于检测
-            outputBuffer += text;
-            if (outputBuffer.length > 2000) {
-              outputBuffer = outputBuffer.slice(-2000);
-            }
-
-            // 检测主机密钥确认提示（使用缓冲区检测）
-            if (!dialogShown && outputBuffer.includes("The authenticity of host") && outputBuffer.includes("can't be established")) {
-              // 提取主机信息
-              const hostMatch = outputBuffer.match(/The authenticity of host '([^']+)'/);
-              const fingerprintMatch = outputBuffer.match(/fingerprint is (SHA256:[^\s]+)/);
-              const keyTypeMatch = outputBuffer.match(/(ED25519|RSA|ECDSA) key fingerprint/);
-
-              if (hostMatch && fingerprintMatch && keyTypeMatch) {
-                dialogShown = true;
-                setHostKeyDialog({
-                  open: true,
-                  host: hostMatch[1],
-                  fingerprint: fingerprintMatch[1],
-                  keyType: keyTypeMatch[1],
-                });
-                dialogShownRef.current = true;
-              }
-            }
-          }
-        );
-        // 保存到 ref 中，确保 cleanup 可以访问
-        unlistenRef.current = unlisten;
-        console.log(`[XTermWrapper] Listener setup complete for: ${eventName}`);
-      } catch (error) {
-        console.error('[XTermWrapper] Failed to setup SSH output listener:', error);
-      }
-    };
-
-    setupOutputListener();
-
-    // cleanup: 清理监听器
-    return () => {
-      if (unlistenRef.current) {
-        console.log(`[XTermWrapper] Cleaning up listener for: ${currentConnectionId}`);
-        unlistenRef.current();
-        unlistenRef.current = null;
-      }
-    };
-  }, [connectionId, isReady, getTerminalInstance]);
-
   // 处理复制操作
   const handleCopy = async () => {
     if (terminalRefInstance.current && terminalRefInstance.current.hasSelection()) {
@@ -493,7 +363,6 @@ export function XTermWrapper({ connectionId, onData }: XTermWrapperProps) {
           sessionId: connectionId, // 后端 API 参数名是 sessionId，但值是 connectionId
           data: new TextEncoder().encode(text),
         });
-        onData?.(text);
       }
     } catch (err) {
       console.error('Failed to paste:', err);
