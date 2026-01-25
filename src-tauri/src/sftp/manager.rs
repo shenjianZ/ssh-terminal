@@ -88,8 +88,17 @@ impl SftpManager {
 
     /// 写入文件
     pub async fn write_file(&self, connection_id: &str, path: &str, content: Vec<u8>) -> Result<()> {
+        tracing::info!("=== Write File Start ===");
+        tracing::info!("Connection ID: {}", connection_id);
+        tracing::info!("Remote path: {}", path);
+        tracing::info!("Content size: {} bytes", content.len());
+
         let client = self.get_or_create_client(connection_id).await?;
+        tracing::info!("SFTP client obtained");
+
         let mut client_guard = client.lock().await;
+        tracing::info!("Client lock acquired, calling write_file...");
+
         client_guard.write_file(path, &content).await
     }
 

@@ -7,11 +7,12 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { FileList } from './FileList';
-import { ArrowUp, Home, RefreshCw, FolderPlus, Trash2, Edit2 } from 'lucide-react';
+import { ArrowUp, Home, RefreshCw, FolderPlus, Trash2, Edit2, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import type { SftpFileInfo } from '@/types/sftp';
 
@@ -23,6 +24,7 @@ interface FilePaneProps {
   selectedFiles: SftpFileInfo[];
   onSelectedFilesChange: (files: SftpFileInfo[]) => void;
   isLoading?: boolean;
+  refreshKey?: number;
 }
 
 export function FilePane({
@@ -33,6 +35,7 @@ export function FilePane({
   selectedFiles,
   onSelectedFilesChange,
   isLoading = false,
+  refreshKey = 0,
 }: FilePaneProps) {
   const [inputPath, setInputPath] = useState(path);
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
@@ -40,15 +43,84 @@ export function FilePane({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [renameValue, setRenameValue] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [internalRefreshKey, setInternalRefreshKey] = useState(0);
+  const [availableDrives, setAvailableDrives] = useState<string[]>([]);
 
   // 同步外部 path 变化到 inputPath
   useEffect(() => {
     setInputPath(path);
   }, [path]);
 
+  // 监听外部的 refreshKey 变化
+  useEffect(() => {
+    if (refreshKey > 0) {
+      console.log('External refreshKey changed:', refreshKey);
+      setInternalRefreshKey(refreshKey);
+    }
+  }, [refreshKey]);
+  const joinPath = (basePath: string, fileName: string): string => {
+    if (type === 'local') {
+      // Windows 本地路径使用反斜杠
+      if (basePath.endsWith('\\') || basePath.endsWith('/')) {
+        return `${basePath}${fileName}`;
+      }
+      return `${basePath}\\${fileName}`;
+    } else {
+      // 远程 Unix 路径使用正斜杠
+      if (basePath === '/') {
+        return `/${fileName}`;
+      }
+      if (basePath.endsWith('/')) {
+        return `${basePath}${fileName}`;
+      }
+      return `${basePath}/${fileName}`;
+    }
+  };
+
+  // 获取父目录路径
+  const getParentPath = (filePath: string): string => {
+    if (type === 'local') {
+      // Windows 路径
+      const lastBackslash = filePath.lastIndexOf('\\');
+      const lastSlash = filePath.lastIndexOf('/');
+      const lastSeparator = Math.max(lastBackslash, lastSlash);
+      if (lastSeparator > 0) {
+        return filePath.substring(0, lastSeparator);
+      }
+      // 如果是根目录（如 D:\），返回原路径
+      return filePath;
+    } else {
+      // Unix 路径
+      const lastSlash = filePath.lastIndexOf('/');
+      if (lastSlash > 0) {
+        return filePath.substring(0, lastSlash);
+      }
+      return '/';
+    }
+  };
+
+  // 同步外部 path 变化到 inputPath
+  useEffect(() => {
+    setInputPath(path);
+  }, [path]);
+
+  // 加载可用盘符（仅本地文件系统）
+  useEffect(() => {
+    if (type === 'local') {
+      const loadDrives = async () => {
+        try {
+          const drives = await invoke<string[]>('local_available_drives');
+          setAvailableDrives(drives);
+        } catch (error) {
+          console.error('Failed to load drives:', error);
+        }
+      };
+      loadDrives();
+    }
+  }, [type]);
+
   const handleGoToParent = () => {
-    const parentPath = path.split('/').slice(0, -1).join('/') || '/';
+    const parentPath = getParentPath(path);
     onPathChange(parentPath);
   };
 
@@ -57,7 +129,7 @@ export function FilePane({
 
     try {
       if (type === 'remote' && connectionId) {
-        const folderPath = path.endsWith('/') ? `${path}${newFolderName}` : `${path}/${newFolderName}`;
+        const folderPath = joinPath(path, newFolderName);
 
         // 调用后端创建文件夹API
         await invoke('sftp_create_dir', {
@@ -69,7 +141,7 @@ export function FilePane({
       setShowNewFolderDialog(false);
       setNewFolderName('');
       // 刷新列表
-      setRefreshKey(prev => prev + 1);
+      setInternalRefreshKey(prev => prev + 1);
     } catch (error) {
       console.error('Failed to create folder:', error);
       const errorMsg = String(error);
@@ -94,7 +166,7 @@ export function FilePane({
             await invoke('sftp_remove_dir', {
               connectionId,
               path: file.path,
-              recursive: false,
+              recursive: true, // 递归删除，可以删除包含子目录和文件的目录
             });
           } else {
             await invoke('sftp_remove_file', {
@@ -107,7 +179,7 @@ export function FilePane({
       setShowDeleteDialog(false);
       onSelectedFilesChange([]);
       // 刷新列表
-      setRefreshKey(prev => prev + 1);
+      setInternalRefreshKey(prev => prev + 1);
     } catch (error) {
       console.error('Failed to delete:', error);
       const errorMsg = String(error);
@@ -129,7 +201,8 @@ export function FilePane({
     try {
       if (type === 'remote' && connectionId) {
         const file = selectedFiles[0];
-        const newPath = file.path.substring(0, file.path.lastIndexOf('/') + 1) + renameValue;
+        const parentPath = getParentPath(file.path);
+        const newPath = joinPath(parentPath, renameValue);
 
         await invoke('sftp_rename', {
           connectionId,
@@ -141,7 +214,7 @@ export function FilePane({
       setRenameValue('');
       onSelectedFilesChange([]);
       // 刷新列表
-      setRefreshKey(prev => prev + 1);
+      setInternalRefreshKey(prev => prev + 1);
     } catch (error) {
       console.error('Failed to rename:', error);
       const errorMsg = String(error);
@@ -163,7 +236,39 @@ export function FilePane({
 
   const handleRefresh = () => {
     // 触发重新加载
-    setRefreshKey(prev => prev + 1);
+    setInternalRefreshKey(prev => prev + 1);
+  };
+
+  // 处理盘符切换
+  const handleDriveChange = async (drive: string) => {
+    console.log('Switching to drive:', drive);
+
+    if (drive === 'C:') {
+      // C盘特殊处理：切换到用户家目录
+      try {
+        const homeDir = await invoke<string>('local_home_dir');
+        onPathChange(homeDir);
+      } catch (error) {
+        console.error('Failed to get home directory:', error);
+        toast.error('无法获取用户家目录');
+      }
+    } else {
+      // 其他盘符：切换到盘符根目录
+      try {
+        const rootPath = await invoke<string>('local_drive_root', { drive });
+        onPathChange(rootPath);
+      } catch (error) {
+        console.error('Failed to get drive root:', error);
+        toast.error(`无法访问 ${drive} 盘`);
+      }
+    }
+  };
+
+  // 提取当前盘符（Windows路径）
+  const getCurrentDrive = () => {
+    if (type !== 'local') return null;
+    const match = path.match(/^([A-Z]):/);
+    return match ? match[1] + ':' : null;
   };
 
   const handleSubmitPath = async (e: React.FormEvent) => {
@@ -215,15 +320,7 @@ export function FilePane({
 
     if (file.is_dir) {
       // 进入目录
-      let newPath: string;
-      if (path === '/') {
-        newPath = `/${file.name}`;
-      } else if (path.endsWith('/')) {
-        newPath = `${path}${file.name}`;
-      } else {
-        newPath = `${path}/${file.name}`;
-      }
-
+      const newPath = joinPath(path, file.name);
       console.log('Navigating to:', newPath);
 
       // 验证路径是否可访问
@@ -342,15 +439,37 @@ export function FilePane({
         </div>
 
         {/* 路径输入 */}
-        <form onSubmit={handleSubmitPath} className="flex items-center gap-2">
-          <Input
-            type="text"
-            value={inputPath}
-            onChange={(e) => setInputPath(e.target.value)}
-            className="h-8 text-sm"
-            placeholder="输入路径，按回车跳转"
-          />
-        </form>
+        <div className="flex items-center gap-2">
+          {/* 盘符选择器（仅本地） */}
+          {type === 'local' && availableDrives.length > 0 && (
+            <Select
+              value={getCurrentDrive() || ''}
+              onValueChange={handleDriveChange}
+            >
+              <SelectTrigger className="w-[70px] h-8">
+                <HardDrive className="h-3 w-3 mr-1 opacity-50" />
+                <SelectValue placeholder="盘符" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableDrives.map((drive) => (
+                  <SelectItem key={drive} value={drive}>
+                    {drive}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <form onSubmit={handleSubmitPath} className="flex-1 flex items-center gap-2">
+            <Input
+              type="text"
+              value={inputPath}
+              onChange={(e) => setInputPath(e.target.value)}
+              className="h-8 text-sm"
+              placeholder="输入路径，按回车跳转"
+            />
+          </form>
+        </div>
       </div>
 
       {/* 文件列表 */}
@@ -363,7 +482,7 @@ export function FilePane({
           onSelectedFilesChange={onSelectedFilesChange}
           onFileDoubleClick={handleFileDoubleClick}
           isLoading={isLoading}
-          refreshKey={refreshKey}
+          refreshKey={internalRefreshKey}
         />
       </div>
 

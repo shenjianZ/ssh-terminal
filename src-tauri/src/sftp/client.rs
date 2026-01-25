@@ -7,7 +7,7 @@ use crate::sftp::{SftpFileInfo};
 use russh_sftp::client::SftpSession;
 use std::path::Path;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// SFTP 客户端
 ///
@@ -123,6 +123,72 @@ impl SftpClient {
         Ok(())
     }
 
+    /// 删除目录（内部递归实现）
+    ///
+    /// 使用 Box::pin 来支持异步递归
+    fn remove_dir_recursive<'a>(
+        &'a mut self,
+        path: &'a str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            debug!("Recursively removing directory: {}", path);
+
+            // 列出目录内容
+            let mut read_dir = match self.session.read_dir(path).await {
+                Ok(rd) => rd,
+                Err(e) => {
+                    // 如果无法读取目录，可能目录不存在或无权限
+                    let error_msg = format!("{:?}", e);
+                    if error_msg.contains("No such file") {
+                        // 目录不存在，视为已删除
+                        debug!("Directory does not exist, considering as removed: {}", path);
+                        return Ok(());
+                    }
+                    return Err(SSHError::Ssh(format!("Failed to list directory '{}': {}", path, e)));
+                }
+            };
+
+            // 递归删除所有条目
+            loop {
+                match read_dir.next() {
+                    Some(entry) => {
+                        let file_name = entry.file_name();
+                        let entry_path = if path.ends_with('/') {
+                            format!("{}{}", path, file_name)
+                        } else {
+                            format!("{}/{}", path, file_name)
+                        };
+
+                        let metadata = entry.metadata();
+
+                        // 判断是否是目录
+                        if metadata.is_dir() {
+                            // 递归删除子目录
+                            debug!("Recursively removing subdirectory: {}", entry_path);
+                            self.remove_dir_recursive(&entry_path).await?;
+                        } else {
+                            // 删除文件
+                            debug!("Removing file in directory: {}", entry_path);
+                            self.session.remove_file(&entry_path).await
+                                .map_err(|e| SSHError::Ssh(format!("Failed to remove file '{}': {}", entry_path, e)))?;
+                        }
+                    }
+                    None => {
+                        // 迭代结束
+                        break;
+                    }
+                }
+            }
+
+            // 删除目录本身
+            self.session.remove_dir(path).await
+                .map_err(|e| SSHError::Ssh(format!("Failed to remove directory '{}': {}", path, e)))?;
+
+            debug!("Directory removed: {}", path);
+            Ok(())
+        })
+    }
+
     /// 删除目录
     ///
     /// # 参数
@@ -132,12 +198,13 @@ impl SftpClient {
         debug!("Removing directory: {} (recursive: {})", path, recursive);
 
         if recursive {
-            // TODO: 实现递归删除
-            // 需要先删除目录中的所有内容
+            // 使用递归删除
+            self.remove_dir_recursive(path).await?;
+        } else {
+            // 非递归，直接删除
+            self.session.remove_dir(path).await
+                .map_err(|e| SSHError::Ssh(format!("Failed to remove directory '{}': {}", path, e)))?;
         }
-
-        self.session.remove_dir(path).await
-            .map_err(|e| SSHError::Ssh(format!("Failed to remove directory '{}': {}", path, e)))?;
 
         debug!("Directory removed: {}", path);
         Ok(())
@@ -201,12 +268,36 @@ impl SftpClient {
     /// - `path`: 文件路径
     /// - `data`: 文件内容
     pub async fn write_file(&mut self, path: &str, data: &[u8]) -> Result<()> {
-        debug!("Writing {} bytes to {}", data.len(), path);
+        info!("=== write_file (SFTP client) Start ===");
+        info!("Target path: {}", path);
+        info!("Data length: {} bytes", data.len());
 
-        self.session.write(path, data).await
-            .map_err(|e| SSHError::Ssh(format!("Failed to write file '{}': {}", path, e)))?;
+        // 创建远程文件（如果不存在）或截断（如果存在）
+        debug!("Creating/opening remote file: {}", path);
+        let mut file = self.session.create(path).await
+            .map_err(|e| {
+                let error_msg = format!("{:?}", e);
+                error!("session.create() failed: {}", error_msg);
+                SSHError::Ssh(format!("Failed to create remote file '{}': {}", path, e))
+            })?;
+
+        debug!("File created, writing {} bytes...", data.len());
+        file.write_all(data).await
+            .map_err(|e| {
+                let error_msg = format!("{:?}", e);
+                error!("write_all() failed: {}", error_msg);
+                SSHError::Ssh(format!("Failed to write to remote file '{}': {}", path, e))
+            })?;
+
+        debug!("Syncing file to server...");
+        file.sync_all().await
+            .map_err(|e| {
+                error!("sync_all() failed: {}", e);
+                SSHError::Ssh(format!("Failed to sync remote file '{}': {}", path, e))
+            })?;
 
         debug!("File written successfully");
+        info!("write_file completed successfully");
         Ok(())
     }
 
@@ -293,9 +384,28 @@ impl SftpClient {
             .map_err(|e| SSHError::Io(format!("Failed to get file metadata: {}", e)))?
             .len();
 
+        // 确保父目录存在（递归创建）
+        if let Some(parent_dir) = Path::new(remote_path).parent() {
+            let parent_str = parent_dir.to_str().unwrap();
+            // 如果父目录不是根目录
+            if !parent_str.is_empty() && parent_str != "/" {
+                info!("Ensuring parent directory exists: {}", parent_str);
+                self.ensure_dir_exists(parent_str).await?;
+            }
+        }
+
         // 创建远程文件
+        // 使用 create 方法，它会创建新文件或截断已存在的文件
+        info!("Creating remote file: {}", remote_path);
+
         let mut remote_file = self.session.create(remote_path).await
-            .map_err(|e| SSHError::Ssh(format!("Failed to create remote file '{}': {}", remote_path, e)))?;
+            .map_err(|e| {
+                let error_msg = format!("{:?}", e);
+                error!("Failed to create file '{}': {}", remote_path, error_msg);
+                SSHError::Ssh(format!("Failed to create remote file '{}': {}", remote_path, e))
+            })?;
+
+        info!("File opened for writing");
 
         // 分块读取和写入
         let mut buffer = vec![0u8; 64 * 1024]; // 64KB buffer
@@ -322,6 +432,50 @@ impl SftpClient {
 
         info!("Upload completed: {} bytes", transferred);
         Ok(())
+    }
+
+    /// 确保目录存在（递归创建）
+    ///
+    /// 如果目录不存在，递归创建父目录，然后创建目标目录
+    fn ensure_dir_exists<'a>(&'a mut self, path: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async move {
+            // 尝试创建目录
+            match self.session.create_dir(path).await {
+                Ok(_) => {
+                    info!("Directory created or already exists: {}", path);
+                    Ok(())
+                }
+                Err(e) => {
+                    let error_msg = format!("{:?}", e);
+
+                    // 如果是"已存在"错误，那不是问题
+                    if error_msg.contains("exists") || error_msg.contains("already exists") {
+                        info!("Directory already exists: {}", path);
+                        return Ok(());
+                    }
+
+                    // 如果是"父目录不存在"错误，递归创建父目录
+                    if error_msg.contains("No such file") {
+                        if let Some(parent) = Path::new(path).parent() {
+                            let parent_str = parent.to_str().unwrap();
+                            // 递归创建父目录（但不是根目录）
+                            if !parent_str.is_empty() && parent_str != "/" {
+                                info!("Creating parent directory: {}", parent_str);
+                                self.ensure_dir_exists(parent_str).await?;
+
+                                // 再次尝试创建目标目录
+                                self.session.create_dir(path).await
+                                    .map_err(|e| SSHError::Ssh(format!("Failed to create directory '{}': {}", path, e)))?;
+                                return Ok(());
+                            }
+                        }
+                    }
+
+                    // 其他错误
+                    Err(SSHError::Ssh(format!("Failed to create directory '{}': {}", path, e)))
+                }
+            }
+        })
     }
 
     /// 关闭 SFTP 会话

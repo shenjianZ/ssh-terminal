@@ -4,16 +4,20 @@
  * 显示本地和远程文件面板
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { FilePane } from './FilePane';
 import { useSftpStore } from '@/store/sftpStore';
 import { ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface DualPaneProps {
   connectionId: string;
+  remoteRefreshKey?: number;
+  localRefreshKey?: number;
 }
 
-export function DualPane({ connectionId }: DualPaneProps) {
+export function DualPane({ connectionId, remoteRefreshKey = 0, localRefreshKey = 0 }: DualPaneProps) {
   const {
     localPath,
     remotePath,
@@ -23,30 +27,10 @@ export function DualPane({ connectionId }: DualPaneProps) {
     selectedRemoteFiles,
     setSelectedLocalFiles,
     setSelectedRemoteFiles,
-    listDir,
   } = useSftpStore();
 
-  const [localLoading] = useState(false);
-  const [remoteLoading, setRemoteLoading] = useState(false);
-
-  // 加载远程目录
-  useEffect(() => {
-    if (connectionId && remotePath) {
-      loadRemoteDir();
-    }
-  }, [connectionId, remotePath]);
-
-  const loadRemoteDir = async () => {
-    setRemoteLoading(true);
-    try {
-      const files = await listDir(connectionId, remotePath);
-      console.log('Remote files loaded:', files.length);
-    } catch (error) {
-      console.error('Failed to load remote directory:', error);
-    } finally {
-      setRemoteLoading(false);
-    }
-  };
+  const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const handleLocalPathChange = (path: string) => {
     setLocalPath(path);
@@ -57,13 +41,85 @@ export function DualPane({ connectionId }: DualPaneProps) {
   };
 
   const handleTransferToRemote = async () => {
-    // TODO: 实现从本地上传到远程
-    console.log('Transfer to remote:', selectedLocalFiles);
+    console.log('Upload button clicked');
+    console.log('Selected local files:', selectedLocalFiles);
+    console.log('Remote path:', remotePath);
+    console.log('Connection ID:', connectionId);
+
+    if (selectedLocalFiles.length === 0) {
+      toast.error('请先选择要上传的文件');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      for (const file of selectedLocalFiles) {
+        // 跳过目录
+        if (file.is_dir) {
+          toast.warning(`跳过目录: ${file.name}`);
+          continue;
+        }
+
+        const remoteFilePath = remotePath.endsWith('/')
+          ? `${remotePath}${file.name}`
+          : `${remotePath}/${file.name}`;
+
+        console.log('Uploading:', file.path, '->', remoteFilePath);
+
+        await invoke('sftp_upload_file', {
+          connectionId,
+          localPath: file.path,
+          remotePath: remoteFilePath,
+        });
+      }
+
+      toast.success(`成功上传 ${selectedLocalFiles.length} 个文件`);
+      setSelectedLocalFiles([]);
+
+      // 刷新远程面板
+      setRemotePath(remotePath + '#');
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error(`上传失败: ${error}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleTransferToLocal = async () => {
-    // TODO: 实现从远程下载到本地
-    console.log('Transfer to local:', selectedRemoteFiles);
+    if (selectedRemoteFiles.length === 0) return;
+
+    setDownloading(true);
+    try {
+      for (const file of selectedRemoteFiles) {
+        // 跳过目录
+        if (file.is_dir) {
+          toast.warning(`跳过目录: ${file.name}`);
+          continue;
+        }
+
+        const localFilePath = localPath.endsWith('/')
+          ? `${localPath}${file.name}`
+          : `${localPath}/${file.name}`;
+
+        await invoke('sftp_download_file', {
+          connectionId,
+          remotePath: file.path,
+          localPath: localFilePath,
+        });
+      }
+
+      toast.success(`成功下载 ${selectedRemoteFiles.length} 个文件`);
+      setSelectedRemoteFiles([]);
+
+      // 刷新本地面板
+      setLocalPath(localPath + '#');
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error(`下载失败: ${error}`);
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -76,7 +132,8 @@ export function DualPane({ connectionId }: DualPaneProps) {
           onPathChange={handleLocalPathChange}
           selectedFiles={selectedLocalFiles}
           onSelectedFilesChange={setSelectedLocalFiles}
-          isLoading={localLoading}
+          isLoading={false}
+          refreshKey={localRefreshKey}
         />
       </div>
 
@@ -84,20 +141,20 @@ export function DualPane({ connectionId }: DualPaneProps) {
       <div className="w-12 border-l border-r flex flex-col items-center py-4 gap-2 bg-muted/20">
         <button
           onClick={handleTransferToRemote}
-          disabled={selectedLocalFiles.length === 0}
-          className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-          title="上传到远程"
+          disabled={selectedLocalFiles.length === 0 || uploading}
+          className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title={uploading ? "上传中..." : "上传到远程"}
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className={`h-4 w-4 ${uploading ? 'animate-pulse' : ''}`} />
         </button>
 
         <button
           onClick={handleTransferToLocal}
-          disabled={selectedRemoteFiles.length === 0}
-          className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-          title="下载到本地"
+          disabled={selectedRemoteFiles.length === 0 || downloading}
+          className="p-2 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title={downloading ? "下载中..." : "下载到本地"}
         >
-          <ChevronRight className="h-4 w-4 transform rotate-180" />
+          <ChevronRight className={`h-4 w-4 transform rotate-180 ${downloading ? 'animate-pulse' : ''}`} />
         </button>
       </div>
 
@@ -110,7 +167,8 @@ export function DualPane({ connectionId }: DualPaneProps) {
           onPathChange={handleRemotePathChange}
           selectedFiles={selectedRemoteFiles}
           onSelectedFilesChange={setSelectedRemoteFiles}
-          isLoading={remoteLoading}
+          isLoading={false}
+          refreshKey={remoteRefreshKey}
         />
       </div>
     </div>

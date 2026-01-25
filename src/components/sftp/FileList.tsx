@@ -38,8 +38,19 @@ export function FileList({
   useEffect(() => {
     const loadFiles = async () => {
       if (type === 'local') {
-        // TODO: 实现本地文件系统访问
-        setFiles([]);
+        // 本地文件系统访问
+        setLoading(true);
+        try {
+          const result = await invoke<SftpFileInfo[]>('local_list_dir', {
+            path,
+          });
+          setFiles(result);
+        } catch (error) {
+          console.error('Failed to list local directory:', error);
+          setFiles([]);
+        } finally {
+          setLoading(false);
+        }
         return;
       }
 

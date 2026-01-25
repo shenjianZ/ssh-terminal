@@ -59,6 +59,9 @@ interface SftpStore {
   setCache: (connectionId: string, path: string, files: SftpFileInfo[]) => void;
   clearCache: (connectionId?: string) => void;
 
+  // 初始化方法
+  initializeLocalPath: () => Promise<void>;
+
   // SFTP 操作方法
   listDir: (connectionId: string, path: string) => Promise<SftpFileInfo[]>;
   createDir: (connectionId: string, path: string, recursive?: boolean) => Promise<void>;
@@ -85,7 +88,7 @@ const CACHE_TTL = 30000; // 30秒缓存
 export const useSftpStore = create<SftpStore>((set, get) => ({
   // 初始状态
   activeConnectionId: null,
-  localPath: '/',
+  localPath: 'C:\\', // Windows 默认路径，会在初始化时更新
   remotePath: '/',
   localFiles: [],
   remoteFiles: [],
@@ -97,6 +100,18 @@ export const useSftpStore = create<SftpStore>((set, get) => ({
   remoteError: null,
   transfers: [],
   cache: new Map(),
+
+  // 初始化本地路径
+  initializeLocalPath: async () => {
+    try {
+      const homeDir = await invoke<string>('local_home_dir');
+      set({ localPath: homeDir });
+      console.log('Local home directory initialized:', homeDir);
+    } catch (error) {
+      console.error('Failed to get home directory:', error);
+      // 如果获取失败，保持默认路径
+    }
+  },
 
   // 基本操作
   setActiveConnection: (id) => set({ activeConnectionId: id }),

@@ -6,17 +6,33 @@
 
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Upload, Download } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Upload, Download, HardDrive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSessionStore } from '@/store/sessionStore';
+import { useSftpStore } from '@/store/sftpStore';
 import { toast } from 'sonner';
 import { DualPane } from '@/components/sftp/DualPane';
+import { invoke } from '@tauri-apps/api/core';
 
 export function SftpManager() {
   const navigate = useNavigate();
   const { sessions } = useSessionStore();
+  const {
+    initializeLocalPath,
+    selectedLocalFiles,
+    selectedRemoteFiles,
+    localPath,
+    remotePath,
+    setSelectedLocalFiles,
+    setSelectedRemoteFiles,
+  } = useSftpStore();
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [remoteRefreshKey, setRemoteRefreshKey] = useState(0);
+  const [localRefreshKey, setLocalRefreshKey] = useState(0);
 
   // 获取可用的 SSH 连接，根据 id 去重
   const availableConnections = (sessions || [])
@@ -24,6 +40,11 @@ export function SftpManager() {
     .filter((conn, index, self) =>
       index === self.findIndex((c) => c.id === conn.id)
     );
+
+  // 初始化本地路径
+  useEffect(() => {
+    initializeLocalPath();
+  }, []);
 
   useEffect(() => {
     // 如果有连接且未选择，自动选择第一个
@@ -52,6 +73,111 @@ export function SftpManager() {
       toast.error('刷新失败', { description: String(error) });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedConnectionId) {
+      toast.error('请先选择一个连接');
+      return;
+    }
+
+    if (selectedLocalFiles.length === 0) {
+      toast.error('请先选择要上传的文件');
+      return;
+    }
+
+    console.log('Upload button clicked');
+    console.log('Selected local files:', selectedLocalFiles);
+    console.log('Remote path:', remotePath);
+    console.log('Connection ID:', selectedConnectionId);
+
+    setUploading(true);
+    try {
+      for (const file of selectedLocalFiles) {
+        // 跳过目录
+        if (file.is_dir) {
+          toast.warning(`跳过目录: ${file.name}`);
+          continue;
+        }
+
+        // 构建远程文件路径
+        let remoteFilePath: string;
+        if (remotePath === '/') {
+          // 根目录特殊处理
+          remoteFilePath = `/${file.name}`;
+        } else if (remotePath.endsWith('/')) {
+          remoteFilePath = `${remotePath}${file.name}`;
+        } else {
+          remoteFilePath = `${remotePath}/${file.name}`;
+        }
+
+        console.log('Remote path:', remotePath);
+        console.log('File name:', file.name);
+        console.log('Constructed remote file path:', remoteFilePath);
+        console.log('Uploading:', file.path, '->', remoteFilePath);
+
+        await invoke('sftp_upload_file', {
+          connectionId: selectedConnectionId,
+          localPath: file.path,
+          remotePath: remoteFilePath,
+        });
+      }
+
+      toast.success(`成功上传 ${selectedLocalFiles.length} 个文件`);
+      setSelectedLocalFiles([]);
+
+      // 刷新远程面板
+      setRemoteRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error(`上传失败: ${error}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!selectedConnectionId) {
+      toast.error('请先选择一个连接');
+      return;
+    }
+
+    if (selectedRemoteFiles.length === 0) {
+      toast.error('请先选择要下载的文件');
+      return;
+    }
+
+    setDownloading(true);
+    try {
+      for (const file of selectedRemoteFiles) {
+        // 跳过目录
+        if (file.is_dir) {
+          toast.warning(`跳过目录: ${file.name}`);
+          continue;
+        }
+
+        const localFilePath = localPath.endsWith('\\')
+          ? `${localPath}${file.name}`
+          : `${localPath}\\${file.name}`;
+
+        await invoke('sftp_download_file', {
+          connectionId: selectedConnectionId,
+          remotePath: file.path,
+          localPath: localFilePath,
+        });
+      }
+
+      toast.success(`成功下载 ${selectedRemoteFiles.length} 个文件`);
+      setSelectedRemoteFiles([]);
+
+      // 刷新本地面板
+      setLocalRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error(`下载失败: ${error}`);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -99,22 +225,23 @@ export function SftpManager() {
 
           <div className="flex items-center gap-2">
             {/* 连接选择器 */}
-            <select
+            <Select
               value={selectedConnectionId || ''}
-              onChange={(e) => handleConnect(e.target.value)}
-              className="px-3 py-2 rounded-md border bg-background text-sm min-w-[200px]"
+              onValueChange={handleConnect}
               disabled={availableConnections.length === 0}
             >
-              {availableConnections.length === 0 ? (
-                <option value="">无可用连接</option>
-              ) : (
-                availableConnections.map((conn) => (
-                  <option key={conn.id} value={conn.id}>
+              <SelectTrigger className="w-[200px]">
+                <HardDrive className="h-4 w-4 mr-2 opacity-50" />
+                <SelectValue placeholder="选择连接" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableConnections.map((conn) => (
+                  <SelectItem key={conn.id} value={conn.id}>
                     {conn.name} - {conn.username}@{conn.host}:{conn.port}
-                  </option>
-                ))
-              )}
-            </select>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             <Button
               variant="outline"
@@ -128,19 +255,21 @@ export function SftpManager() {
             <Button
               variant="outline"
               size="sm"
-              disabled={!selectedConnectionId}
+              onClick={handleUpload}
+              disabled={!selectedConnectionId || uploading || selectedLocalFiles.length === 0}
             >
               <Upload className="h-4 w-4 mr-2" />
-              上传
+              {uploading ? '上传中...' : '上传'}
             </Button>
 
             <Button
               variant="outline"
               size="sm"
-              disabled={!selectedConnectionId}
+              onClick={handleDownload}
+              disabled={!selectedConnectionId || downloading || selectedRemoteFiles.length === 0}
             >
               <Download className="h-4 w-4 mr-2" />
-              下载
+              {downloading ? '下载中...' : '下载'}
             </Button>
           </div>
         </div>
@@ -149,7 +278,11 @@ export function SftpManager() {
       {/* 双面板文件管理器 */}
       {selectedConnectionId ? (
         <div className="flex-1 overflow-hidden">
-          <DualPane connectionId={selectedConnectionId} />
+          <DualPane
+            connectionId={selectedConnectionId}
+            remoteRefreshKey={remoteRefreshKey}
+            localRefreshKey={localRefreshKey}
+          />
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
