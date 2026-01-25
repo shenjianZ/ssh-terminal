@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "tauri:build:win": "powershell -ExecutionPolicy Bypass -File ./build-win.ps1",
     "tauri:android": "tauri android build --",
     "tauri:android:clean": "tauri android build -- --clean",
     "tauri:android:release:arm64": "tauri android build -- --release --target arm64-v8a",
