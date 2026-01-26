@@ -42,3 +42,7 @@ ANDROID_*
 adb-install*
 build-and-install*
 sign*
+
+SCREENSHOT_USAGE*
+
+rustdoc*

@@ -2,6 +2,12 @@ import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { ElementSelector } from "@/components/devtools/ElementSelector";
+import { DevToolsFloatingButton } from "@/components/devtools/DevToolsFloatingButton";
+import { useDevToolsStore } from "@/store/devtoolsStore";
+
+// 检测是否为开发环境
+const isDevelopment = import.meta.env.DEV;
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -10,6 +16,7 @@ interface MainLayoutProps {
 export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
   const isTerminalPage = location.pathname === "/" || location.pathname === "/terminal";
+  const { isElementSelectorOpen, closeElementSelector } = useDevToolsStore();
 
   return (
     <div className="flex h-screen bg-background">
@@ -35,6 +42,14 @@ export function MainLayout({ children }: MainLayoutProps) {
           )}
         </main>
       </div>
+
+      {/* Element Selector - 全局覆盖层（仅开发环境） */}
+      {isDevelopment && isElementSelectorOpen && (
+        <ElementSelector onClose={closeElementSelector} />
+      )}
+
+      {/* DevTools 浮动按钮（仅开发环境） */}
+      {isDevelopment && <DevToolsFloatingButton />}
     </div>
   );
 }
