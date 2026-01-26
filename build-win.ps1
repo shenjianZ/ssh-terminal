@@ -49,7 +49,7 @@ if ($oldMsi) {
     $newMsiName = $oldMsi.Name -replace "_x64_en-US.msi", "_x64_en-US-win.msi"
     $newMsiPath = Join-Path $msiPath $newMsiName
     Move-Item -Path $oldMsi.FullName -Destination $newMsiPath -Force
-    Write-Host "✓ MSI: $($oldMsi.Name) -> $newMsiName" -ForegroundColor Cyan
+    Write-Host "MSI: $($oldMsi.Name) -> $newMsiName" -ForegroundColor Cyan
 } else {
     $newMsiPath = ""
     Write-Host "Warning: MSI installer not found." -ForegroundColor Yellow
