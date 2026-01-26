@@ -40,8 +40,6 @@ export interface TerminalConfig {
   scrollback: number;
   /** 心跳间隔（秒），0表示禁用（默认30秒） */
   keepAliveInterval: number;
-  /** 选择文本时自动复制 */
-  copyOnSelect: boolean;
   /** 通知设置 */
   notificationsEnabled: boolean;
   soundEffectsEnabled: boolean;

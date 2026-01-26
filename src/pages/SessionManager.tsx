@@ -47,6 +47,22 @@ export function SessionManager() {
     }
   }, [location.pathname, isStorageLoaded, loadSessions, loadSessionsFromStorage]);
 
+  // 监听快捷键触发的新建会话事件
+  useEffect(() => {
+    const handleNewSessionShortcut = () => {
+      // 只在会话管理页面生效
+      if (location.pathname === '/sessions') {
+        handleNewSession();
+      }
+    };
+
+    window.addEventListener('keybinding-new-session', handleNewSessionShortcut);
+
+    return () => {
+      window.removeEventListener('keybinding-new-session', handleNewSessionShortcut);
+    };
+  }, [location.pathname]);
+
   const handleNewSession = () => {
     playSound(SoundEffect.BUTTON_CLICK);
     setSaveDialogOpen(true);

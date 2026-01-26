@@ -37,7 +37,6 @@ export const useTerminalConfigStore = create<TerminalConfigStore>((set, get) => 
         padding: newConfig.padding,
         scrollback: newConfig.scrollback,
         keepAliveInterval: newConfig.keepAliveInterval,
-        copyOnSelect: newConfig.copyOnSelect,
         notificationsEnabled: newConfig.notificationsEnabled,
         soundEffectsEnabled: newConfig.soundEffectsEnabled,
       },

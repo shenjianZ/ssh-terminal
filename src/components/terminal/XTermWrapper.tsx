@@ -7,8 +7,11 @@ import { SearchAddon } from '@xterm/addon-search';
 import { invoke } from '@tauri-apps/api/core';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { useTerminalStore } from '@/store/terminalStore';
+import { useKeybindingStore } from '@/store/keybindingStore';
 import { HostKeyConfirmDialog } from '@/components/ssh/HostKeyConfirmDialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from '@/components/ui/context-menu';
+import { normalizeKeyCombo } from '@/lib/keybindingParser';
+import { keybindingActionExecutor } from '@/lib/keybindingActions';
 import '@xterm/xterm/css/xterm.css';
 
 interface XTermWrapperProps {
@@ -25,9 +28,10 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
   const isInitializedRef = useRef(false);
   const dialogShownRef = useRef(false);
   const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentFontSizeRef = useRef<number | null>(null); // 使用 ref 存储当前字体大小，确保同步读取
   const [isReady, setIsReady] = useState(false);
   const [hasSelection, setHasSelection] = useState(false);
-  const [tempFontSize, setTempFontSize] = useState<number | null>(null);
+  const [tempFontSize, setTempFontSize] = useState<number | null>(null); // 仅用于触发重新渲染
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -44,6 +48,127 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
   const { getTerminalInstance, setTerminalInstance, setupOutputListener, setupOnDataListener } = useTerminalStore();
   const theme = getCurrentTheme();
 
+  /**
+   * 在 xterm.js 内部的 textarea 上附加键盘事件拦截器
+   * 这是最有效的拦截方式，可以直接阻止 xterm.js 的处理
+   */
+  const attachKeyInterceptor = (terminalElement: HTMLElement) => {
+    // xterm.js 在内部创建一个 textarea 元素来接收键盘输入
+    // 我们需要找到这个 textarea 并在上面添加捕获阶段的监听器
+    setTimeout(() => {
+      const textarea = terminalElement.querySelector('textarea');
+      if (!textarea) {
+        console.warn('[XTermWrapper] textarea not found in terminal element');
+        console.log('[XTermWrapper] Terminal element children:', terminalElement.children.length);
+        // 打印所有子元素
+        Array.from(terminalElement.children).forEach((child, i) => {
+          console.log(`[XTermWrapper] Child ${i}:`, child.tagName, child.className);
+        });
+        return;
+      }
+
+      // 检查是否已经添加过拦截器
+      if ((textarea as any).__keyInterceptorAttached) {
+        return;
+      }
+
+      // 添加捕获阶段的键盘事件监听器
+      const keyInterceptor = async (event: KeyboardEvent) => {
+        // 忽略只有修饰键的事件
+        if (
+          event.key === 'Control' ||
+          event.key === 'Alt' ||
+          event.key === 'Shift' ||
+          event.key === 'Meta'
+        ) {
+          return;
+        }
+
+        // 标准化快捷键组合
+        const keys = normalizeKeyCombo(event);
+
+        // 从 store 中查找对应的动作ID
+        const actionId = useKeybindingStore.getState().getActionByKeys(keys);
+
+        // 如果没有找到对应的快捷键，不处理
+        if (!actionId) {
+          return;
+        }
+
+        // 特殊处理：粘贴 - 始终拦截并执行粘贴
+        if (actionId === 'terminal.paste') {
+          handlePaste();
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        // 特殊处理：查找 - 始终拦截并打开查找对话框
+        if (actionId === 'terminal.find') {
+          handleFind();
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        // 特殊处理：清屏 - 始终拦截并清屏
+        if (actionId === 'terminal.clear') {
+          handleClear();
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        // 特殊处理：放大/缩小字体 - 始终拦截并执行（使用上下文菜单相同的方法）
+        if (actionId === 'terminal.zoomIn') {
+          handleZoomIn();
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        if (actionId === 'terminal.zoomOut') {
+          handleZoomOut();
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        if (actionId === 'terminal.zoomReset') {
+          // 重置字体大小为配置文件的值
+          currentFontSizeRef.current = null; // 清除 ref，让它回退到 config.fontSize
+          setTempFontSize(null); // 清除 state
+          if (terminalRefInstance.current) {
+            terminalRefInstance.current.options.fontSize = config.fontSize; // 使用配置的字体大小
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          return;
+        }
+
+        // 其他快捷键使用全局执行器
+        const executed = await keybindingActionExecutor.execute(actionId);
+        if (executed) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+        }
+      };
+
+      // 添加键盘事件拦截器
+      textarea.addEventListener('keydown', keyInterceptor, { capture: true, passive: false });
+
+      // 标记已添加
+      (textarea as any).__keyInterceptorAttached = true;
+    }, 100);
+  };
+
   // 初始化终端（从 store 获取或创建）
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -52,12 +177,12 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
 
     // 检查 store 中是否已有该 connectionId 的终端实例
     const existingInstance = getTerminalInstance(currentConnectionId);
-    
+
     // 如果已有实例，复用它（无论是否初始化过）
     if (existingInstance && existingInstance.terminal) {
       const terminal = existingInstance.terminal;
       terminalRefInstance.current = terminal;
-      
+
       // 从 store 中获取 addon 引用
       if (existingInstance.fitAddon) {
         fitAddonRef.current = existingInstance.fitAddon;
@@ -68,7 +193,7 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
       if (existingInstance.webglAddon) {
         webglAddonRef.current = existingInstance.webglAddon;
       }
-      
+
       // 检查终端是否已经绑定到 DOM
       const terminalElement = (terminal as unknown as { element?: HTMLElement }).element;
       const currentContainer = terminalRef.current;
@@ -100,17 +225,26 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
             existingInstance.fitAddon?.fit();
           }, 50);
         }
+
+        // 添加键盘事件拦截器到 textarea
+        attachKeyInterceptor(terminalElement);
       } else if (!terminalElement) {
         // 终端未打开（这种情况不应该发生，但为了安全）
         console.warn('[XTermWrapper] Terminal instance exists but not opened, reopening...');
         currentContainer.innerHTML = '';
         terminal.open(currentContainer);
-        
+
         // 更新 store 中的容器引用
         setTerminalInstance(currentConnectionId, {
           ...existingInstance,
           containerElement: currentContainer,
         });
+
+        // 添加键盘事件拦截器
+        setTimeout(() => {
+          const elem = (terminal as unknown as { element?: HTMLElement }).element;
+          if (elem) attachKeyInterceptor(elem);
+        }, 10);
       } else {
         // 终端已经绑定到正确的容器，只需要调整大小
         if (existingInstance.fitAddon) {
@@ -118,8 +252,11 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
             existingInstance.fitAddon?.fit();
           }, 50);
         }
+
+        // 添加键盘事件拦截器（可能之前没有添加）
+        attachKeyInterceptor(terminalElement);
       }
-      
+
       // 重新设置事件监听器（确保使用正确的 connectionId）
       // 注意：xterm.js 的 onSelectionChange 和 onData 会替换之前的监听器
       terminal.onSelectionChange(() => {
@@ -212,6 +349,14 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(terminalRef.current);
+
+    // 添加键盘事件拦截器
+    setTimeout(() => {
+      const elem = (terminal as unknown as { element?: HTMLElement }).element;
+      if (elem) {
+        attachKeyInterceptor(elem);
+      }
+    }, 10);
 
     // 监听选中状态变化
     terminal.onSelectionChange(() => {
@@ -354,7 +499,15 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
     // 更新其他配置
     terminal.options.cursorBlink = config.cursorBlink;
     terminal.options.cursorStyle = config.cursorStyle;
-    terminal.options.fontSize = config.fontSize;
+    // 字体大小：如果有临时的缩放大小，使用临时值；否则使用配置值
+    const finalFontSize = tempFontSize || config.fontSize;
+    terminal.options.fontSize = finalFontSize;
+    // 同步 ref
+    if (tempFontSize) {
+      currentFontSizeRef.current = tempFontSize;
+    } else {
+      currentFontSizeRef.current = null;
+    }
     terminal.options.fontFamily = config.fontFamily;
     terminal.options.fontWeight = config.fontWeight;
     terminal.options.lineHeight = config.lineHeight;
@@ -366,7 +519,7 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
     } catch {
       // 忽略刷新错误，主题已通过 options 更新
     }
-  }, [config, theme, isReady]);
+  }, [config, theme, isReady, tempFontSize]);
 
   // 处理复制操作
   const handleCopy = async () => {
@@ -412,9 +565,14 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
   // 增大字号
   const handleZoomIn = () => {
     if (terminalRefInstance.current) {
-      const currentSize = tempFontSize || config.fontSize;
+      // 使用 ref 读取最新的字体大小，确保快速连按也能正确累加
+      const currentSize = currentFontSizeRef.current || config.fontSize;
       const newSize = Math.min(currentSize + 2, 32);
+      // 同步更新 ref
+      currentFontSizeRef.current = newSize;
+      // 更新 state 以触发重新渲染
       setTempFontSize(newSize);
+      // 立即应用到终端
       terminalRefInstance.current.options.fontSize = newSize;
     }
   };
@@ -422,9 +580,14 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
   // 减小字号
   const handleZoomOut = () => {
     if (terminalRefInstance.current) {
-      const currentSize = tempFontSize || config.fontSize;
+      // 使用 ref 读取最新的字体大小，确保快速连按也能正确累加
+      const currentSize = currentFontSizeRef.current || config.fontSize;
       const newSize = Math.max(currentSize - 2, 8);
+      // 同步更新 ref
+      currentFontSizeRef.current = newSize;
+      // 更新 state 以触发重新渲染
       setTempFontSize(newSize);
+      // 立即应用到终端
       terminalRefInstance.current.options.fontSize = newSize;
     }
   };

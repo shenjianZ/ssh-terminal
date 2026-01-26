@@ -219,18 +219,17 @@ export const TERMINAL_THEMES: Record<string, TerminalTheme> = {
 };
 
 export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
-  themeId: 'one-dark',
-  fontSize: 14,
-  fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace',
-  fontWeight: 400,
-  lineHeight: 1.3,
-  cursorStyle: 'bar',
+  themeId: 'github-light',
+  fontSize: 20,
+  fontFamily: 'Consolas, monospace',
+  fontWeight: 900,
+  lineHeight: 1.45,
+  cursorStyle: 'underline',
   cursorBlink: true,
-  letterSpacing: 0,
+  letterSpacing: 0.5,
   padding: 16,
   scrollback: 10000,
-  keepAliveInterval: 30, // 默认30秒
-  copyOnSelect: false,
+  keepAliveInterval: 30,
   notificationsEnabled: true,
   soundEffectsEnabled: true,
 };

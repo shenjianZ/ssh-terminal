@@ -42,7 +42,6 @@ pub struct TerminalConfig {
     pub padding: u16,
     pub scrollback: u32,
     pub keep_alive_interval: u64,
-    pub copy_on_select: bool,
     pub notifications_enabled: bool,
     pub sound_effects_enabled: bool,
 }
@@ -424,18 +423,17 @@ impl Storage {
     /// 获取默认配置
     fn get_default_config() -> TerminalConfig {
         TerminalConfig {
-            theme_id: "one-dark".to_string(),
-            font_size: 14,
-            font_family: "\"JetBrains Mono\", \"Fira Code\", \"Cascadia Code\", Consolas, monospace".to_string(),
-            font_weight: 400,
-            line_height: 1.3,
-            cursor_style: "bar".to_string(),
+            theme_id: "github-light".to_string(),
+            font_size: 20,
+            font_family: "Consolas, monospace".to_string(),
+            font_weight: 900,
+            line_height: 1.45,
+            cursor_style: "underline".to_string(),
             cursor_blink: true,
-            letter_spacing: 0.0,
+            letter_spacing: 0.5,
             padding: 16,
             scrollback: 10000,
             keep_alive_interval: 30,
-            copy_on_select: false,
             notifications_enabled: true,
             sound_effects_enabled: true,
         }

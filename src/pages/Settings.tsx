@@ -5,7 +5,8 @@ import {
   Terminal,
   Bell,
   Keyboard,
-  Info
+  Info,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -14,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ModeToggle } from '@/components/mode-toggle';
 import { TerminalSettings } from '@/components/settings/TerminalSettings';
+import { KeybindingsSettings } from '@/components/keybindings/KeybindingsSettings';
 import { soundManager, playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
@@ -74,7 +76,7 @@ export function Settings() {
 
       {/* 设置选项卡 */}
       <Tabs defaultValue="appearance" className="space-y-4 sm:space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 gap-1 h-auto">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 gap-1 h-auto">
           <TabsTrigger value="appearance" className="gap-2">
             <Palette className="h-4 w-4" />
             外观
@@ -84,8 +86,12 @@ export function Settings() {
             终端
           </TabsTrigger>
           <TabsTrigger value="session" className="gap-2">
-            <Keyboard className="h-4 w-4" />
+            <Users className="h-4 w-4" />
             会话
+          </TabsTrigger>
+          <TabsTrigger value="keybindings" className="gap-2">
+            <Keyboard className="h-4 w-4" />
+            快捷键
           </TabsTrigger>
           <TabsTrigger value="about" className="gap-2">
             <Info className="h-4 w-4" />
@@ -184,6 +190,11 @@ export function Settings() {
               </p>
             </div>
           </div>
+        </TabsContent>
+
+        {/* 快捷键设置 */}
+        <TabsContent value="keybindings" className="space-y-6">
+          <KeybindingsSettings />
         </TabsContent>
 
         {/* 关于 */}

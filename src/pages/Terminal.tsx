@@ -50,7 +50,8 @@ export function Terminal() {
     // 监听tab关闭事件，自动断开连接
     const handleTabClosed = async (event: CustomEvent) => {
       const { connectionId } = event.detail;
-      const session = sessions.find(s => s.id === connectionId);
+      // 使用 getState() 获取最新的 sessions，避免将 sessions 加入依赖数组导致无限循环
+      const session = useSessionStore.getState().sessions.find(s => s.id === connectionId);
       if (session && session.status === 'connected') {
         try {
           await disconnectSession(connectionId);
@@ -61,12 +62,73 @@ export function Terminal() {
       }
     };
 
+    // 监听快捷键触发的新建连接事件
+    const handleNewConnection = () => {
+      setQuickConnectOpen(true);
+    };
+
+    // 监听快捷键触发的复制标签页事件
+    const handleDuplicateTab = async (event: Event) => {
+      const customEvent = event as CustomEvent<{ connectionId: string; sessionId: string }>;
+      const { connectionId, sessionId } = customEvent.detail;
+
+      try {
+        // 使用 getState() 获取最新的 sessions，避免将 sessions 加入依赖数组导致无限循环
+        const session = useSessionStore.getState().sessions.find(s => s.id === sessionId);
+        const tabTitle = session?.name || `${sessionId.substring(0, 8)}...`;
+
+        // 连接新创建的连接实例
+        await connectSession(connectionId);
+        playSound(SoundEffect.SUCCESS);
+
+        // 添加新标签页
+        addTab(connectionId, tabTitle);
+
+        console.log(`[Terminal] Created duplicate tab for session: ${sessionId}`);
+      } catch (error) {
+        playSound(SoundEffect.ERROR);
+        console.error('Failed to create duplicate tab:', error);
+      }
+    };
+
+    // 监听全局的打开快速连接对话框事件（从 App.tsx 触发）
+    const handleGlobalOpenQuickConnect = () => {
+      setQuickConnectOpen(true);
+    };
+
+    // 当从其他页面导航到终端页面时，检查是否需要打开快速连接对话框
+    const checkAndOpenQuickConnect = () => {
+      if (location.pathname === '/' || location.pathname === '/terminal') {
+        // 使用 setTimeout 确保组件已经完全渲染
+        setTimeout(() => {
+          // 检查 URL 查询参数或全局状态
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('action') === 'new-connection') {
+            setQuickConnectOpen(true);
+            // 清除 URL 参数
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        }, 100);
+      }
+    };
+
     window.addEventListener('tab-closed-for-session', handleTabClosed as unknown as EventListener);
+    window.addEventListener('keybinding-new-connection', handleNewConnection);
+    window.addEventListener('keybinding-duplicate-tab', handleDuplicateTab);
+    window.addEventListener('keybinding-terminal-find', handleNewConnection); // 查找功能也打开快速连接对话框（临时）
+    window.addEventListener('global-open-quick-connect', handleGlobalOpenQuickConnect);
+
+    // 初始检查
+    checkAndOpenQuickConnect();
 
     return () => {
       window.removeEventListener('tab-closed-for-session', handleTabClosed as unknown as EventListener);
+      window.removeEventListener('keybinding-new-connection', handleNewConnection);
+      window.removeEventListener('keybinding-duplicate-tab', handleDuplicateTab);
+      window.removeEventListener('keybinding-terminal-find', handleNewConnection);
+      window.removeEventListener('global-open-quick-connect', handleGlobalOpenQuickConnect);
     };
-  }, [location.pathname, isStorageLoaded, loadSessions, loadSessionsFromStorage, disconnectSession]);
+  }, [location.pathname, isStorageLoaded, loadSessions, loadSessionsFromStorage, disconnectSession, connectSession, addTab]);
 
   // 当切换到终端页面时，聚焦当前活动标签页的终端
   useEffect(() => {

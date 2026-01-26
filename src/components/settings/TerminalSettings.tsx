@@ -206,18 +206,6 @@ export function TerminalSettings() {
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <Label htmlFor="copy-on-select">选择时复制</Label>
-            <Switch
-              id="copy-on-select"
-              checked={config.copyOnSelect}
-              onCheckedChange={(copyOnSelect) => {
-                setConfig({ copyOnSelect });
-                playSound(SoundEffect.TOGGLE_SWITCH);
-              }}
-            />
-          </div>
-
           <div className="space-y-2">
             <Label>光标样式</Label>
             <div className="grid grid-cols-3 gap-2">

@@ -55,6 +55,34 @@ export function SftpManager() {
     }
   }, [availableConnections, selectedConnectionId]);
 
+  // 监听快捷键事件
+  useEffect(() => {
+    const handleUploadShortcut = () => {
+      console.log('[SftpManager] Upload shortcut triggered');
+      handleUpload();
+    };
+
+    const handleDownloadShortcut = () => {
+      console.log('[SftpManager] Download shortcut triggered');
+      handleDownload();
+    };
+
+    const handleRefreshShortcut = () => {
+      console.log('[SftpManager] Refresh shortcut triggered');
+      handleRefresh();
+    };
+
+    window.addEventListener('keybinding-sftp-upload', handleUploadShortcut);
+    window.addEventListener('keybinding-sftp-download', handleDownloadShortcut);
+    window.addEventListener('keybinding-sftp-refresh', handleRefreshShortcut);
+
+    return () => {
+      window.removeEventListener('keybinding-sftp-upload', handleUploadShortcut);
+      window.removeEventListener('keybinding-sftp-download', handleDownloadShortcut);
+      window.removeEventListener('keybinding-sftp-refresh', handleRefreshShortcut);
+    };
+  }, [selectedConnectionId, selectedLocalFiles, selectedRemoteFiles, localPath, remotePath]);
+
   const handleConnect = async (connectionId: string) => {
     playSound(SoundEffect.BUTTON_CLICK);
     setSelectedConnectionId(connectionId);
