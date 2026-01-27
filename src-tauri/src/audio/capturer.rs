@@ -19,6 +19,8 @@ pub struct SystemAudioCapturer {
     channels: u16,
     /// WAV 文件写入器（用于 MVP 验证）
     wav_writer: Option<Arc<Mutex<hound::WavWriter<std::io::BufWriter<std::fs::File>>>>>,
+    /// 音频增益倍数（WASAPI Loopback 捕获的音量通常较低）
+    volume_gain: f32,
 }
 
 impl SystemAudioCapturer {
@@ -31,6 +33,7 @@ impl SystemAudioCapturer {
             target_sample_rate: 48000, // 目标采样率 48kHz
             channels: 1,                 // 单声道
             wav_writer: None,
+            volume_gain: 2.0, // 音频增益 2 倍（WASAPI Loopback 捕获音量较低）
         })
     }
 
@@ -73,7 +76,22 @@ impl SystemAudioCapturer {
         );
 
         let source_sample_rate = supported_config.sample_rate();
-        let config: StreamConfig = supported_config.clone().into();
+
+        // 自定义音频配置以优化音频包大小和延迟
+        // 使用较大的缓冲区可以减少数据包发送频率，提高稳定性
+        let buffer_size = cpal::BufferSize::Fixed(960); // 960 样本 = 20ms @ 48kHz
+        let config = cpal::StreamConfig {
+            channels: supported_config.channels(),
+            sample_rate: source_sample_rate,
+            buffer_size,
+        };
+
+        info!(
+            "[AudioCapturer] Audio config - sample_rate: {:?}, channels: {:?}, buffer_size: {:?}",
+            config.sample_rate,
+            config.channels,
+            config.buffer_size
+        );
 
         // TODO: WAV 文件验证暂时禁用（将在优化阶段重新启用）
         // let wav_spec = hound::WavSpec {
@@ -166,12 +184,20 @@ impl SystemAudioCapturer {
 
                 // 转换为 f32 并发送到前端
                 if let Some(ref sender) = audio_sender {
+                    let volume_gain = 2.0; // 音频增益倍数
                     let float_samples: Vec<f32> = data.iter()
-                        .map(|s| (*s).into())
+                        .map(|s| {
+                            let sample = (*s).into();
+                            // 应用音量增益并限制在 [-1.0, 1.0] 范围内
+                            let gain_sample = sample * volume_gain;
+                            gain_sample.max(-1.0).min(1.0)
+                        })
                         .collect();
 
-                    // 非阻塞发送
-                    let _ = sender.try_send(float_samples);
+                    // 使用阻塞发送确保不丢失数据
+                    if let Err(e) = sender.send(float_samples) {
+                        error!("[AudioCapturer] Failed to send audio data: {}", e);
+                    }
                 }
 
                 // TODO: 写入 WAV 文件（暂时禁用）

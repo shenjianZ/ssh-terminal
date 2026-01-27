@@ -229,7 +229,7 @@ export function SftpManager() {
 
   if (availableConnections.length === 0) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="flex-1 flex items-start justify-center pt-32 bg-background">
         <div className="text-center">
           <h2 className="text-2xl font-bold mb-4">SFTP 文件管理器</h2>
           <p className="text-muted-foreground mb-6">

@@ -24,6 +24,11 @@ export class AudioCaptureManager {
   private speakerWorkletNode: AudioWorkletNode | null = null;
   private speakerUnlisten: (() => void) | null = null;
 
+  // 性能监控
+  private lastAudioPacketTime: number = 0;
+  private audioPacketCount: number = 0;
+  private audioPacketHealthCheckInterval: number | null = null;
+
   /**
    * 初始化音频捕获管理器
    */
@@ -137,17 +142,52 @@ export class AudioCaptureManager {
       // 监听来自后端的音频数据
       // 注意：事件名称需要与 Rust 后端发送的事件名称一致
       this.speakerUnlisten = await listen<Float32Array>('audio-packet', (event) => {
+        // 性能监控：记录接收时间
+        this.lastAudioPacketTime = Date.now();
+        this.audioPacketCount++;
+
         // 将接收到的 PCM 数据转发到 Worklet
         if (this.speakerWorkletNode) {
           this.speakerWorkletNode.port.postMessage(event.payload);
         }
       });
 
+      // 启动音频健康检查（每 3 秒检查一次）
+      this.startAudioHealthCheck();
+
       this.speakerCapturingActive = true;
       console.log('[AudioCapture] Speaker audio capture started with AudioWorklet');
     } catch (error) {
       console.error('[AudioCapture] Failed to start speaker capture:', error);
       throw new Error(`扬声器捕获启动失败: ${error}`);
+    }
+  }
+
+  /**
+   * 启动音频健康检查
+   * 定期检查音频数据包是否正常到达
+   */
+  private startAudioHealthCheck(): void {
+    this.audioPacketHealthCheckInterval = window.setInterval(() => {
+      const timeSinceLastPacket = Date.now() - this.lastAudioPacketTime;
+
+      // 如果超过 5 秒没有收到音频数据包，发出警告
+      if (timeSinceLastPacket > 5000 && this.speakerCapturingActive) {
+        console.warn('[AudioCapture] No audio packets received in last 5 seconds - Backend may have stopped or connection issue');
+
+        // 重置计数器避免重复警告
+        this.lastAudioPacketTime = Date.now();
+      }
+    }, 3000);
+  }
+
+  /**
+   * 停止音频健康检查
+   */
+  private stopAudioHealthCheck(): void {
+    if (this.audioPacketHealthCheckInterval !== null) {
+      clearInterval(this.audioPacketHealthCheckInterval);
+      this.audioPacketHealthCheckInterval = null;
     }
   }
 
@@ -161,6 +201,15 @@ export class AudioCaptureManager {
 
     try {
       console.log('[AudioCapture] Stopping speaker audio capture...');
+
+      // 停止音频健康检查
+      this.stopAudioHealthCheck();
+
+      // 输出统计信息
+      console.log('[AudioCapture] Speaker capture statistics:', {
+        totalPackets: this.audioPacketCount,
+        duration: this.lastAudioPacketTime ? `${Date.now() - this.lastAudioPacketTime}ms since last packet` : 'N/A',
+      });
 
       // 取消事件监听
       if (this.speakerUnlisten) {
@@ -176,6 +225,10 @@ export class AudioCaptureManager {
 
       // 调用 Tauri 后端命令停止捕获
       await invoke('audio_stop_capturing');
+
+      // 重置统计信息
+      this.lastAudioPacketTime = 0;
+      this.audioPacketCount = 0;
 
       this.speakerCapturingActive = false;
       console.log('[AudioCapture] Speaker audio capture stopped');

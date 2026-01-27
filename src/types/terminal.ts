@@ -55,4 +55,6 @@ export interface TerminalConfig {
   audioQuality: 'low' | 'medium' | 'high';
   /** 音频采样率 (Hz) */
   audioSampleRate: number;
+  /** 应用主题（dark/light/system） */
+  appTheme: 'dark' | 'light' | 'system';
 }

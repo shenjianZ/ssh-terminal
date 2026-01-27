@@ -238,6 +238,7 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   recordSpeaker: false,
   audioQuality: 'medium',
   audioSampleRate: 48000,
+  appTheme: 'system',
 };
 
 // 可用字体列表
