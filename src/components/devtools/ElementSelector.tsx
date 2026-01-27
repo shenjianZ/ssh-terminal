@@ -28,11 +28,11 @@ export function ElementSelector({ onClose }: ElementSelectorProps) {
     if (element.className) {
       try {
         // className 可能是 SVGAnimatedString 或其他类型
-        const classNameStr = typeof element.className === 'string' 
-          ? element.className 
-          : element.className.toString();
-        
-        const classes = classNameStr.split(' ').filter(c => c.trim());
+        const classNameStr = typeof element.className === 'string'
+          ? element.className
+          : String(element.className);
+
+        const classes = classNameStr.split(' ').filter((c: string) => c.trim());
         if (classes.length > 0) {
           desc += `.${classes.slice(0, 3).join('.')}`;
           if (classes.length > 3) desc += '...';

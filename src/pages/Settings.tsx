@@ -178,6 +178,68 @@ export function Settings() {
 
             <Separator />
 
+            <div className="space-y-2">
+              <Label htmlFor="videoQuality">视频录制质量</Label>
+              <p className="text-sm text-muted-foreground">
+                选择录制视频的质量（影响视频文件大小）
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Button
+                  variant={config.videoQuality === 'low' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => setConfig({ videoQuality: 'low' })}
+                >
+                  低 (500 Kbps)
+                </Button>
+                <Button
+                  variant={config.videoQuality === 'medium' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => setConfig({ videoQuality: 'medium' })}
+                >
+                  中 (2 Mbps)
+                </Button>
+                <Button
+                  variant={config.videoQuality === 'high' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => setConfig({ videoQuality: 'high' })}
+                >
+                  高 (5 Mbps)
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label htmlFor="videoFormat">视频录制格式</Label>
+              <p className="text-sm text-muted-foreground">
+                选择录制视频的格式（WebM 推荐用于网络播放）
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Button
+                  variant={config.videoFormat === 'webm' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => setConfig({ videoFormat: 'webm' })}
+                >
+                  WebM (VP9)
+                </Button>
+                <Button
+                  variant={config.videoFormat === 'mp4' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => setConfig({ videoFormat: 'mp4' })}
+                >
+                  MP4 (H.264)
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="rounded-lg border p-4 bg-muted/20">
               <h3 className="font-semibold mb-2 flex items-center gap-2">
                 <Bell className="h-4 w-4" />

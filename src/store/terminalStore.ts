@@ -5,6 +5,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { useRecordingStore } from '@/store/recordingStore';
 
 export interface TerminalTab {
   id: string;
@@ -180,12 +181,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
     // 检查监听器是否已经设置（避免重复设置）
     if (instance.outputListenerActive) {
-      console.log(`[TerminalStore] Output listener already active for: ${connectionId}, skipping...`);
       return;
     }
 
     const eventName = `ssh-output-${connectionId}`;
-    console.log(`[TerminalStore] Setting up persistent listener for: ${eventName}`);
 
     // 用于检测主机密钥的缓冲区（在监听器外部声明，保持状态）
     let outputBuffer = '';
@@ -200,7 +199,9 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       const currentInstance = get().terminalInstances.get(connectionId);
       if (currentInstance?.terminal) {
         currentInstance.terminal.write(data);
-        console.log(`[TerminalStore] Received ${data.length} bytes for ${connectionId}: ${text.substring(0, 50)}...`);
+
+        // 录制输出事件
+        useRecordingStore.getState().recordOutput(connectionId, data);
 
         // 更新缓冲区用于检测
         outputBuffer += text;
@@ -236,7 +237,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
           outputListenerActive: true,
         });
         set({ terminalInstances: newInstances });
-        console.log(`[TerminalStore] Listener setup complete for: ${eventName}`);
       }
     }).catch((error) => {
       console.error(`[TerminalStore] Failed to setup listener for ${eventName}:`, error);
@@ -247,7 +247,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
   cleanupOutputListener: (connectionId) => {
     const instance = get().terminalInstances.get(connectionId);
     if (instance?.outputUnlisten) {
-      console.log(`[TerminalStore] Cleaning up listener for: ${connectionId}`);
       instance.outputUnlisten();
 
       // 从 store 中移除 unlisten 引用，并标记监听器未激活
@@ -271,7 +270,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
 
     // 检查监听器是否已经激活（避免重复设置）
     if (instance.onDataListenerActive) {
-      console.log(`[TerminalStore] onData listener already active for: ${connectionId}, skipping...`);
       return;
     }
 
@@ -296,8 +294,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       return;
     }
 
-    console.log(`[TerminalStore] Setting up onData listener for: ${connectionId}`);
-
     // 创建 onData 处理器
     const onDataHandler = (data: string) => {
       // 从 store 获取最新的实例，确保 connectionId 没有变化
@@ -306,7 +302,10 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       // 双重检查：确保终端实例和处理器仍然有效
       if (currentInstance?.terminal === terminal &&
           currentInstance?.onDataHandler === onDataHandler) {
-        console.log(`[TerminalStore] Writing data to connection: ${connectionId}, length: ${data.length}, data: ${JSON.stringify(data)}`);
+
+        // 录制输入事件
+        useRecordingStore.getState().recordInput(connectionId, data);
+
         invoke('terminal_write', {
           sessionId: connectionId,
           data: new TextEncoder().encode(data),
@@ -330,16 +329,12 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       onDataListenerActive: true,
     });
     set({ terminalInstances: updatedInstances });
-
-    console.log(`[TerminalStore] onData listener setup complete for: ${connectionId}`);
   },
 
   // 清理 onData 监听器
   cleanupOnDataListener: (connectionId) => {
     const instance = get().terminalInstances.get(connectionId);
     if (instance?.onDataDisposable) {
-      console.log(`[TerminalStore] Cleaning up onData listener for: ${connectionId}`);
-
       try {
         instance.onDataDisposable.dispose();
       } catch (e) {
@@ -364,7 +359,6 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
     if (instance?.terminal) {
       try {
         instance.terminal.focus();
-        console.log(`[TerminalStore] Focused terminal for connection: ${connectionId}`);
       } catch (e) {
         console.warn(`[TerminalStore] Failed to focus terminal for ${connectionId}:`, e);
       }

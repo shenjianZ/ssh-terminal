@@ -39,6 +39,8 @@ export const useTerminalConfigStore = create<TerminalConfigStore>((set, get) => 
         keepAliveInterval: newConfig.keepAliveInterval,
         notificationsEnabled: newConfig.notificationsEnabled,
         soundEffectsEnabled: newConfig.soundEffectsEnabled,
+        videoQuality: newConfig.videoQuality,
+        videoFormat: newConfig.videoFormat,
       },
     });
   },
