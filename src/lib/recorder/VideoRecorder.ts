@@ -116,15 +116,39 @@ export class VideoRecorder {
       console.warn('[VideoRecorder] Failed to enable WebGL renderer:', e);
     }
 
-    // 等待 Canvas 渲染
+    // 等待 Canvas 渲染并确保其尺寸稳定
     await new Promise<void>((resolve) => {
+      let lastWidth = 0;
+      let lastHeight = 0;
+      let stableCount = 0;
+      const maxStableCount = 3; // 需要连续3次检查尺寸都相同才认为稳定
+
       const checkCanvas = () => {
         const canvasElement = this.container?.querySelector('canvas:not(.xterm-link-layer)') as HTMLCanvasElement;
-        if (canvasElement) {
-          resolve();
-        } else {
+
+        if (!canvasElement) {
           setTimeout(checkCanvas, 50);
+          return;
         }
+
+        const currentWidth = canvasElement.width;
+        const currentHeight = canvasElement.height;
+
+        // 检查Canvas尺寸是否稳定
+        if (currentWidth === lastWidth && currentHeight === lastHeight) {
+          stableCount++;
+          if (stableCount >= maxStableCount) {
+            console.log('[VideoRecorder] Canvas stabilized at', currentWidth, 'x', currentHeight);
+            resolve();
+            return;
+          }
+        } else {
+          stableCount = 0;
+          lastWidth = currentWidth;
+          lastHeight = currentHeight;
+        }
+
+        setTimeout(checkCanvas, 50);
       };
       checkCanvas();
     });
@@ -203,14 +227,18 @@ export class VideoRecorder {
   /**
    * 开始录制视频
    */
-  start(): void {
+  async start(): Promise<void> {
     if (!this.mediaRecorder || this.isRecording) {
       return;
     }
 
+    // 额外等待200ms确保Canvas完全渲染
+    await new Promise(resolve => setTimeout(resolve, 200));
+
     this.recordedChunks = [];
     this.mediaRecorder.start(100); // 每 100ms 生成一个数据块
     this.isRecording = true;
+    console.log('[VideoRecorder] Recording started');
   }
 
   /**

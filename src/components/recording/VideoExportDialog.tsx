@@ -156,12 +156,25 @@ export function VideoExportDialog({
       // 使用 Tauri 的文件保存对话框
       const { save } = await import('@tauri-apps/plugin-dialog');
 
-      const defaultFileName = `${recordingFileItem.metadata.sessionName}_${recordingFileItem.metadata.startTime}.webm`;
+      // 根据 Blob 的 MIME 类型确定文件扩展名
+      const mimeType = exportedBlob.type || 'video/webm';
+      let fileExtension = 'webm';
+      let filterExtensions = ['webm'];
+
+      if (mimeType.includes('mp4')) {
+        fileExtension = 'mp4';
+        filterExtensions = ['mp4'];
+      } else if (mimeType.includes('webm')) {
+        fileExtension = 'webm';
+        filterExtensions = ['webm'];
+      }
+
+      const defaultFileName = `${recordingFileItem.metadata.sessionName}_${recordingFileItem.metadata.startTime}.${fileExtension}`;
       const filePath = await save({
         filters: [
           {
             name: 'Video Files',
-            extensions: ['webm'],
+            extensions: filterExtensions,
           },
         ],
         defaultPath: defaultFileName,

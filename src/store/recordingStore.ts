@@ -39,13 +39,15 @@ interface RecordingStore {
    * @param sessionName 会话名称
    * @param terminalSize 终端尺寸
    * @param initialPrompt 初始终端内容（包括提示符）
+   * @param preInitializedVideoRecorder 预初始化的视频录制器（可选）
    */
   startRecording: (
     connectionId: string,
     sessionName: string,
     terminalSize: { cols: number; rows: number },
-    initialPrompt?: string
-  ) => void;
+    initialPrompt?: string,
+    preInitializedVideoRecorder?: any
+  ) => Promise<void>;
 
   /**
    * 停止录制并保存
@@ -235,7 +237,7 @@ export const useRecordingStore = create<RecordingStore>((set, get) => ({
 
   // ========== 录制控制方法 ==========
 
-  startRecording: async (connectionId, sessionName, terminalSize, initialPrompt) => {
+  startRecording: async (connectionId, sessionName, terminalSize, initialPrompt, preInitializedVideoRecorder?: any) => {
     // 检查是否已经在录制
     const existingSession = get().recordingSessions.get(connectionId);
     if (existingSession && existingSession.status === 'recording') {
@@ -249,14 +251,23 @@ export const useRecordingStore = create<RecordingStore>((set, get) => ({
     // 创建录制器实例（包含终端配置）
     const recorder = new TerminalRecorder(connectionId, sessionName, terminalSize, terminalConfig);
 
-    // 创建视频录制器实例
-    const videoRecorder = new VideoRecorder();
+    // 使用预初始化的videoRecorder或创建新的
+    let videoRecorder = preInitializedVideoRecorder;
+    if (!videoRecorder) {
+      videoRecorder = new VideoRecorder();
+      try {
+        await videoRecorder.initialize(sessionName, terminalSize, terminalConfig);
+      } catch (error) {
+        console.error('[RecordingStore] Failed to initialize video recorder:', error);
+        // 视频录制失败不影响事件录制
+      }
+    }
+
+    // 开始视频录制（在倒计时结束后）
     try {
-      await videoRecorder.initialize(sessionName, terminalSize, terminalConfig);
-      videoRecorder.start();
+      await videoRecorder.start();
     } catch (error) {
-      console.error('[RecordingStore] Failed to initialize video recorder:', error);
-      // 视频录制失败不影响事件录制
+      console.error('[RecordingStore] Failed to start video recorder:', error);
     }
 
     // 开始录制

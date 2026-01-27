@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRecordingStore } from '@/store/recordingStore';
 import { useTerminalStore } from '@/store/terminalStore';
+import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { Button } from '@/components/ui/button';
 import {
   Circle,
@@ -22,6 +23,8 @@ export function RecordingControls({
   );
   const [sessionInputName, setSessionInputName] = useState(sessionName);
   const [showNameDialog, setShowNameDialog] = useState(false);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [currentDuration, setCurrentDuration] = useState(0);
 
   // 实时更新录制时长（每秒更新）
@@ -53,6 +56,9 @@ export function RecordingControls({
       return;
     }
 
+    // 关闭命名对话框
+    setShowNameDialog(false);
+
     // 使用用户输入的会话名称，或使用默认名称
     const finalSessionName = sessionInputName.trim() || sessionName;
 
@@ -62,17 +68,24 @@ export function RecordingControls({
       ? { cols: terminalInstance.terminal.cols, rows: terminalInstance.terminal.rows }
       : { cols: 80, rows: 24 };
 
-    // 捕获当前终端内容（包括提示符）
+    // === 准备阶段：在倒计时前完成所有初始化工作 ===
+
+    // 1. 聚焦终端并等待稳定
+    if (terminalInstance?.terminal) {
+      try {
+        const terminal = terminalInstance.terminal;
+        terminal.focus();
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } catch (e) {
+        console.warn('[RecordingControls] Failed to focus terminal:', e);
+      }
+    }
+
+    // 2. 捕获初始终端内容（包括提示符）
     let initialPrompt = '';
     if (terminalInstance?.terminal) {
       try {
         const terminal = terminalInstance.terminal;
-
-        // 先聚焦终端，确保光标位置正确
-        terminal.focus();
-
-        // 等待一小段时间让聚焦生效
-        await new Promise(resolve => setTimeout(resolve, 50));
 
         const buffer = terminal.buffer.active;
         const cursorY = buffer.cursorY;
@@ -108,7 +121,7 @@ export function RecordingControls({
           lineCount: lines.length,
           hasPromptPattern,
           preview: initialPrompt.substring(0, 100),
-          fullContent: initialPrompt, // 打印完整内容
+          fullContent: initialPrompt,
           contentLength: initialPrompt.length
         });
 
@@ -122,7 +135,38 @@ export function RecordingControls({
       }
     }
 
-    await useRecordingStore.getState().startRecording(connectionId, finalSessionName, terminalSize, initialPrompt);
+    // 3. 初始化VideoRecorder（在倒计时前完成Canvas准备）
+    const { VideoRecorder } = await import('@/lib/recorder/VideoRecorder');
+    const videoRecorder = new VideoRecorder();
+    try {
+      const terminalConfig = useTerminalConfigStore.getState().config;
+      await videoRecorder.initialize(finalSessionName, terminalSize, terminalConfig);
+      console.log('[RecordingControls] VideoRecorder initialized');
+    } catch (error) {
+      console.error('[RecordingControls] Failed to initialize video recorder:', error);
+    }
+
+    // === 准备完成，开始倒计时 ===
+    setShowCountdown(true);
+    setCountdown(2);
+
+    // 倒计时逻辑
+    for (let i = 2; i > 0; i--) {
+      setCountdown(i);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    // 倒计时结束，开始录制
+    setShowCountdown(false);
+
+    // 调用录制开始方法，传入已初始化的videoRecorder
+    await useRecordingStore.getState().startRecording(
+      connectionId,
+      finalSessionName,
+      terminalSize,
+      initialPrompt,
+      videoRecorder
+    );
   };
 
   const stopRecording = async () => {
@@ -154,6 +198,18 @@ export function RecordingControls({
 
   return (
     <div className="flex items-center gap-2">
+      {/* 倒计时界面 */}
+      {showCountdown && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="text-center">
+            <div className="text-9xl font-bold text-white animate-pulse">
+              {countdown}
+            </div>
+            <div className="text-white text-xl mt-4">即将开始录制...</div>
+          </div>
+        </div>
+      )}
+
       {/* 会话名称输入对话框 */}
       {showNameDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -167,7 +223,6 @@ export function RecordingControls({
               onChange={(e) => setSessionInputName(e.target.value)}
               onKeyDown={async (e) => {
                 if (e.key === 'Enter') {
-                  setShowNameDialog(false);
                   await startRecording();
                 } else if (e.key === 'Escape') {
                   setShowNameDialog(false);
@@ -183,10 +238,7 @@ export function RecordingControls({
               >
                 取消
               </Button>
-              <Button size="sm" onClick={async () => {
-                setShowNameDialog(false);
-                await startRecording();
-              }}>
+              <Button size="sm" onClick={startRecording}>
                 开始录制
               </Button>
             </div>
