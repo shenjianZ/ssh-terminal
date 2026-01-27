@@ -29,7 +29,8 @@ pub fn audio_start_capturing(
     }
 
     // 创建音频数据通道
-    let (tx, rx) = bounded::<Vec<f32>>(60); // 缓冲 60 个音频包（约 1 秒）
+    // 增加缓冲区大小到 300 个包（约 5 秒），避免音频数据丢失
+    let (tx, rx) = bounded::<Vec<f32>>(300);
 
     let mut capturer = SystemAudioCapturer::new()?;
     capturer.set_audio_sender(tx)?;

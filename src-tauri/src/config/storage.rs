@@ -56,6 +56,8 @@ pub struct TerminalConfig {
     pub audio_quality: String,
     #[serde(default = "default_audio_sample_rate")]
     pub audio_sample_rate: u32,
+    #[serde(default = "default_app_theme")]
+    pub app_theme: String,
 }
 
 fn default_video_quality() -> String {
@@ -80,6 +82,10 @@ fn default_audio_quality() -> String {
 
 fn default_audio_sample_rate() -> u32 {
     48000
+}
+
+fn default_app_theme() -> String {
+    "system".to_string()
 }
 
 /// 保存的会话（密码已加密）
@@ -457,7 +463,7 @@ impl Storage {
     }
 
     /// 获取默认配置
-    fn get_default_config() -> TerminalConfig {
+    pub fn get_default_config() -> TerminalConfig {
         TerminalConfig {
             theme_id: "github-light".to_string(),
             font_size: 20,
@@ -478,6 +484,7 @@ impl Storage {
             record_speaker: false,
             audio_quality: "medium".to_string(),
             audio_sample_rate: 48000,
+            app_theme: "system".to_string(),
         }
     }
 }

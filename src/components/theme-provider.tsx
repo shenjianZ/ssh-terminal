@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import { useTerminalConfigStore } from "@/store/terminalConfigStore";
 
 type Theme = "dark" | "light" | "system";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
   defaultTheme?: Theme;
-  storageKey?: string;
 };
 
 type ThemeProviderState = {
@@ -23,12 +23,17 @@ const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  const { config, setConfig } = useTerminalConfigStore();
+  const [theme, setThemeState] = useState<Theme>(() => config.appTheme || defaultTheme);
+
+  // 当配置更新时同步状态
+  useEffect(() => {
+    if (config.appTheme && config.appTheme !== theme) {
+      setThemeState(config.appTheme);
+    }
+  }, [config.appTheme, theme]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -49,9 +54,9 @@ export function ThemeProvider({
 
   const value = {
     theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
-      setTheme(theme);
+    setTheme: async (theme: Theme) => {
+      await setConfig({ appTheme: theme });
+      setThemeState(theme);
     },
   };
 

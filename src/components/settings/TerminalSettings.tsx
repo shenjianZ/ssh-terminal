@@ -15,6 +15,7 @@ import { TERMINAL_THEMES, AVAILABLE_FONTS } from '@/config/themes';
 import { ResetIcon, MinusIcon, PlusIcon } from '@radix-ui/react-icons';
 import { playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
+import { invoke } from '@tauri-apps/api/core';
 
 interface SliderControlProps {
   label: string;
@@ -84,8 +85,33 @@ function SliderControl({ label, value, unit, min, max, step, onChange }: SliderC
 export function TerminalSettings() {
   const { config, setConfig, setTheme, resetConfig } = useTerminalConfigStore();
 
+  const handleReset = async () => {
+    try {
+      const defaultConfig = await invoke('storage_config_get_default');
+      await setConfig(defaultConfig);
+      playSound(SoundEffect.SUCCESS);
+    } catch (error) {
+      console.error('Failed to reset config:', error);
+      playSound(SoundEffect.ERROR);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* 顶部标题和重置按钮 */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">终端设置</h2>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleReset}
+          className="gap-2"
+        >
+          <ResetIcon className="h-4 w-4" />
+          恢复默认
+        </Button>
+      </div>
+
       {/* 主题选择 */}
       <Card>
         <CardHeader>
@@ -227,6 +253,45 @@ export function TerminalSettings() {
         </CardContent>
       </Card>
 
+      {/* 连接设置 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>连接</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>心跳间隔</Label>
+            <p className="text-sm text-muted-foreground">
+              保持 SSH 连接活跃的间隔秒数: {config.keepAliveInterval}s
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[0, 15, 30, 60, 120].map((value) => (
+                <Button
+                  key={value}
+                  variant={config.keepAliveInterval === value ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-16 touch-manipulation"
+                  onClick={() => {
+                    setConfig({ keepAliveInterval: value });
+                    playSound(SoundEffect.BUTTON_CLICK);
+                  }}
+                >
+                  {value === 0 ? '禁用' : `${value}s`}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3 bg-muted/20">
+            <p className="text-xs text-muted-foreground">
+              💡 启用心跳功能可以防止长时间空闲导致 SSH 连接断开。
+              建议设置为 30-60 秒以平衡性能和连接稳定性。
+              设置为 0 可以禁用心跳功能。
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 其他设置 */}
       <Card>
         <CardHeader>
@@ -252,20 +317,6 @@ export function TerminalSettings() {
             step={100}
             onChange={(scrollback) => setConfig({ scrollback })}
           />
-
-          <div className="pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetConfig();
-                playSound(SoundEffect.BUTTON_CLICK);
-              }}
-              className="w-full"
-            >
-              <ResetIcon className="mr-2 h-4 w-4" />
-              恢复默认设置
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

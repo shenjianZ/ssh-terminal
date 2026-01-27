@@ -89,7 +89,7 @@ function AppContent() {
 
   if (isMobile) {
     return (
-      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+      <ThemeProvider defaultTheme="system">
         <MobileLayout>
           <Routes>
             <Route path="/" element={<MobileSessionList />} />
@@ -103,7 +103,7 @@ function AppContent() {
   }
 
   return (
-    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+    <ThemeProvider defaultTheme="system">
       <MainLayout>
         <Routes>
           <Route path="/" element={<Terminal />} />

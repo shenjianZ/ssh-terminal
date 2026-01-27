@@ -3,12 +3,12 @@ import {
   Settings as SettingsIcon,
   Palette,
   Terminal,
-  Bell,
   Keyboard,
   Info,
-  Users,
   Mic,
-  Volume2
+  Volume2,
+  Github,
+  RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -21,9 +21,10 @@ import { KeybindingsSettings } from '@/components/keybindings/KeybindingsSetting
 import { soundManager, playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 export function Settings() {
-  const { config, setConfig, loadConfig } = useTerminalConfigStore();
+  const { config, setConfig, loadConfig, resetConfig } = useTerminalConfigStore();
   const [settings, setSettings] = useState({
     // 终端设置
     terminalFont: 'monospace',
@@ -67,13 +68,35 @@ export function Settings() {
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* 页面标题 */}
       <div className="mb-4 sm:mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 sm:gap-3">
-          <SettingsIcon className="h-6 w-6 sm:h-8 sm:w-8" />
-          设置
-        </h1>
-        <p className="text-sm sm:text-base text-muted-foreground mt-1">
-          配置应用偏好和终端选项
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 sm:gap-3">
+              <SettingsIcon className="h-6 w-6 sm:h-8 sm:w-8" />
+              设置
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              配置应用偏好和终端选项
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const defaultConfig = await invoke('storage_config_get_default');
+                await setConfig(defaultConfig);
+                playSound(SoundEffect.SUCCESS);
+              } catch (error) {
+                console.error('Failed to reset config:', error);
+                playSound(SoundEffect.ERROR);
+              }
+            }}
+            className="gap-2"
+          >
+            <RotateCcw className="h-4 w-4" />
+            重置所有
+          </Button>
+        </div>
       </div>
 
       {/* 设置选项卡 */}
@@ -87,9 +110,9 @@ export function Settings() {
             <Terminal className="h-4 w-4" />
             终端
           </TabsTrigger>
-          <TabsTrigger value="session" className="gap-2">
-            <Users className="h-4 w-4" />
-            会话
+          <TabsTrigger value="recording" className="gap-2">
+            <Mic className="h-4 w-4" />
+            录制
           </TabsTrigger>
           <TabsTrigger value="keybindings" className="gap-2">
             <Keyboard className="h-4 w-4" />
@@ -103,6 +126,29 @@ export function Settings() {
 
         {/* 外观设置 */}
         <TabsContent value="appearance" className="space-y-6">
+          {/* 顶部标题和重置按钮 */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">外观设置</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const defaultConfig = await invoke('storage_config_get_default');
+                  await setConfig(defaultConfig);
+                  playSound(SoundEffect.SUCCESS);
+                } catch (error) {
+                  console.error('Failed to reset config:', error);
+                  playSound(SoundEffect.ERROR);
+                }
+              }}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              恢复默认
+            </Button>
+          </div>
+
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -153,33 +199,32 @@ export function Settings() {
           <TerminalSettings />
         </TabsContent>
 
-        {/* 会话设置 */}
-        <TabsContent value="session" className="space-y-6">
+        {/* 录制设置 */}
+        <TabsContent value="recording" className="space-y-6">
+          {/* 顶部标题和重置按钮 */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">录制设置</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const defaultConfig = await invoke('storage_config_get_default');
+                  await setConfig(defaultConfig);
+                  playSound(SoundEffect.SUCCESS);
+                } catch (error) {
+                  console.error('Failed to reset config:', error);
+                  playSound(SoundEffect.ERROR);
+                }
+              }}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              恢复默认
+            </Button>
+          </div>
+
           <div className="space-y-4">
-            <Separator />
-
-            <div className="space-y-2">
-              <Label htmlFor="keepalive">心跳间隔</Label>
-              <p className="text-sm text-muted-foreground">
-                保持 SSH 连接活跃的间隔秒数: {config.keepAliveInterval}s
-              </p>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {[0, 15, 30, 60, 120].map((value) => (
-                  <Button
-                    key={value}
-                    variant={config.keepAliveInterval === value ? 'default' : 'outline'}
-                    size="sm"
-                    className="flex-1 min-w-16 touch-manipulation"
-                    onClick={() => setConfig({ keepAliveInterval: value })}
-                  >
-                    {value === 0 ? '禁用' : `${value}s`}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
             <div className="space-y-2">
               <Label htmlFor="videoQuality">视频录制质量</Label>
               <p className="text-sm text-muted-foreground">
@@ -328,15 +373,61 @@ export function Settings() {
 
             <Separator />
 
+            <div className="space-y-2">
+              <Label>音频采样率</Label>
+              <p className="text-sm text-muted-foreground">
+                选择录制音频的采样率（当前: {config.audioSampleRate} Hz）
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Button
+                  variant={config.audioSampleRate === 44100 ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => {
+                    setConfig({ audioSampleRate: 44100 });
+                    playSound(SoundEffect.BUTTON_CLICK);
+                  }}
+                  disabled={!config.recordMicrophone && !config.recordSpeaker}
+                >
+                  44.1 kHz
+                </Button>
+                <Button
+                  variant={config.audioSampleRate === 48000 ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => {
+                    setConfig({ audioSampleRate: 48000 });
+                    playSound(SoundEffect.BUTTON_CLICK);
+                  }}
+                  disabled={!config.recordMicrophone && !config.recordSpeaker}
+                >
+                  48 kHz
+                </Button>
+                <Button
+                  variant={config.audioSampleRate === 96000 ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1 min-w-24 touch-manipulation"
+                  onClick={() => {
+                    setConfig({ audioSampleRate: 96000 });
+                    playSound(SoundEffect.BUTTON_CLICK);
+                  }}
+                  disabled={!config.recordMicrophone && !config.recordSpeaker}
+                >
+                  96 kHz
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
             <div className="rounded-lg border p-4 bg-muted/20">
               <h3 className="font-semibold mb-2 flex items-center gap-2">
-                <Bell className="h-4 w-4" />
-                连接提示
+                <Volume2 className="h-4 w-4" />
+                录制提示
               </h3>
               <p className="text-sm text-muted-foreground">
-                启用心跳功能可以防止长时间空闲导致 SSH 连接断开。
-                建议设置为 30-60 秒以平衡性能和连接稳定性。
-                设置为 0 可以禁用心跳功能。
+                音频录制需要浏览器权限。启用麦克风录制需要用户授权，
+                扬声器录制仅在支持 WASAPI Loopback Recording 的平台上可用。
               </p>
             </div>
           </div>
@@ -382,6 +473,35 @@ export function Settings() {
                   <p className="font-medium">终端</p>
                   <p className="text-muted-foreground text-xs">xterm.js</p>
                 </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <h3 className="font-semibold">开源仓库</h3>
+              <div className="rounded-lg border p-4 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Github className="h-5 w-5" />
+                    <div>
+                      <p className="font-medium">GitHub 仓库</p>
+                      <p className="text-sm text-muted-foreground">shenjianZ/ssh-terminal</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openUrl('https://github.com/shenjianZ/ssh-terminal')}
+                    className="gap-2"
+                  >
+                    <Github className="h-4 w-4" />
+                    访问
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-3">
+                  欢迎访问 GitHub 仓库查看源代码、提交 Issue 或参与贡献
+                </p>
               </div>
             </div>
 

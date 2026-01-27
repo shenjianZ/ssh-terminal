@@ -58,3 +58,9 @@ pub async fn storage_config_save(config: crate::config::storage::TerminalConfig,
 pub async fn storage_config_load(app: AppHandle) -> std::result::Result<Option<crate::config::storage::TerminalConfig>, String> {
     Storage::load_app_config(Some(&app)).map_err(|e| e.to_string())
 }
+
+/// 获取默认应用配置
+#[tauri::command]
+pub async fn storage_config_get_default() -> crate::config::storage::TerminalConfig {
+    Storage::get_default_config()
+}

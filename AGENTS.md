@@ -67,6 +67,13 @@ terminal/
 │   │   │   ├── ErrorBoundary.tsx
 │   │   │   ├── TabBar.tsx
 │   │   │   └── XTermWrapper.tsx
+│   │   ├── recording/            # 录制相关组件
+│   │   │   ├── RecordingControls.tsx
+│   │   │   ├── RecordingIndicator.tsx
+│   │   │   ├── RecordingManager.tsx
+│   │   │   └── VideoExportDialog.tsx
+│   │   ├── sftp/                 # SFTP 组件
+│   │   ├── keybindings/          # 快捷键设置组件
 │   │   └── ui/                   # shadcn/ui 基础组件
 │   │       ├── avatar.tsx
 │   │       ├── badge.tsx
@@ -83,20 +90,35 @@ terminal/
 │   │       └── tabs.tsx
 │   ├── config/                   # 配置文件
 │   │   └── themes.ts             # 主题配置
-│   ├── lib/                      # 工具函数
+│   ├── lib/                      # 工具函数和库
+│   │   ├── audio/                # 音频相关
+│   │   │   ├── AudioCaptureManager.ts
+│   │   │   └── pcm-processor.worklet.ts
+│   │   ├── recorder/             # 录制相关
+│   │   │   ├── VideoRecorder.ts
+│   │   │   ├── TerminalRecorder.ts
+│   │   │   ├── VideoExporter.ts
+│   │   │   ├── PlaybackEngine.ts
+│   │   │   └── RecordingFormat.ts
 │   │   ├── sounds.ts             # 音效管理
+│   │   ├── keybindingActions.ts  # 快捷键动作
 │   │   └── utils.ts              # 通用工具函数
 │   ├── pages/                    # 页面组件
 │   │   ├── SessionManager.tsx    # 会话管理页面
 │   │   ├── Settings.tsx          # 设置页面
+│   │   ├── SftpManager.tsx       # SFTP 管理页面
 │   │   └── Terminal.tsx          # 终端页面
 │   ├── store/                    # Zustand 状态管理
 │   │   ├── sessionStore.ts       # 会话状态管理
 │   │   ├── terminalConfigStore.ts # 终端配置状态管理
-│   │   └── terminalStore.ts      # 终端状态管理
+│   │   ├── terminalStore.ts      # 终端状态管理
+│   │   ├── recordingStore.ts     # 录制状态管理
+│   │   ├── sftpStore.ts         # SFTP 状态管理
+│   │   └── keybindingStore.ts   # 快捷键状态管理
 │   ├── types/                    # TypeScript 类型定义
 │   │   ├── ssh.ts                # SSH 相关类型
-│   │   └── terminal.ts           # 终端相关类型
+│   │   ├── terminal.ts           # 终端相关类型
+│   │   └── recording.ts          # 录制相关类型
 │   ├── App.tsx                   # 主应用组件
 │   ├── index.css                 # 全局样式
 │   └── main.tsx                  # 应用入口
@@ -106,14 +128,26 @@ terminal/
 │   │   │   ├── mod.rs
 │   │   │   ├── session.rs        # 会话管理命令
 │   │   │   ├── storage.rs        # 存储命令
-│   │   │   └── terminal.rs       # 终端命令
+│   │   │   ├── terminal.rs       # 终端命令
+│   │   │   ├── audio.rs         # 音频捕获命令
+│   │   │   └── recording.rs     # 录制命令
 │   │   ├── config/               # 配置管理
 │   │   │   ├── mod.rs
 │   │   │   └── storage.rs
 │   │   ├── ssh/                  # SSH 管理
 │   │   │   ├── mod.rs
 │   │   │   ├── manager.rs        # SSH 管理器
-│   │   │   └── session.rs        # SSH 会话
+│   │   │   ├── session.rs        # SSH 会话
+│   │   │   ├── connection.rs     # SSH 连接实例
+│   │   │   ├── backend.rs        # SSH 后端抽象
+│   │   │   ├── backends/         # SSH 后端实现
+│   │   │   │   ├── system_ssh.rs # 系统 SSH 实现
+│   │   │   │   └── russh.rs     # Russh 纯 Rust 实现
+│   │   │   └── pty/             # PTY 支持
+│   │   ├── audio/                 # 音频捕获
+│   │   │   ├── mod.rs
+│   │   │   └── capturer.rs       # 系统音频捕获器
+│   │   ├── sftp/                 # SFTP 实现
 │   │   ├── error.rs              # 错误处理
 │   │   ├── lib.rs                # 库入口
 │   │   └── main.rs               # 应用入口
@@ -175,7 +209,36 @@ pnpm tauri build
 
 ### 测试
 
-TODO: 添加测试脚本和测试框架配置
+#### 前端类型检查
+
+```bash
+# 运行 TypeScript 类型检查
+pnpm tsc --noEmit
+```
+
+#### 代码质量检查
+
+```bash
+# 运行 ESLint 检查
+pnpm lint
+
+# 自动修复 ESLint 问题
+pnpm lint:fix
+```
+
+#### Rust 后端检查
+
+```bash
+# Rust 代码检查（在 src-tauri 目录下）
+cd src-tauri
+cargo check
+cargo clippy
+
+# 运行 Rust 测试
+cargo test
+```
+
+TODO: 添加端到端测试和前端单元测试
 
 ## 开发约定
 
@@ -314,6 +377,156 @@ SSH 连接通过 Rust 后端的 `SSHManager` 管理，使用系统 SSH 命令和
 - Solarized Light
 - Dracula
 - Monokai
+- Nord
+- Tokyo Night
+- GitHub Light
+
+### 终端录制系统
+
+终端录制系统支持视频+音频的完整录制能力，使用混合架构实现。
+
+**录制架构**：
+
+**视频录制**：
+- 从 xterm.js 的 Canvas 捕获画面（`canvas.captureStream(30)`）
+- 使用 WebGL 渲染器（`WebglAddon`）提高性能
+- 使用 MediaRecorder API 编码为 WebM (VP9/VP8) 或 MP4 (H.264)
+- 支持三种质量：Low (500 kbps), Medium (2 Mbps), High (5 Mbps)
+
+**音频录制**：
+- **麦克风录制**：前端使用 `navigator.mediaDevices.getUserMedia()`
+  - 单声道，48kHz 采样率
+  - 支持回声消除、噪声抑制、自动增益控制
+- **扬声器录制**：后端 Rust 使用 Windows WASAPI Loopback Recording
+  - 通过 cpal 库捕获默认输出设备的 loopback 音频
+  - 使用 AudioWorklet 处理 PCM 数据
+  - 关键配置：
+    - 音频缓冲区：300 个包（约 5 秒）
+    - 音频包大小：960 样本（20ms @ 48kHz）
+    - 音量增益：2.0x（WASAPI Loopback 捕获音量较低）
+    - 使用阻塞发送 `sender.send()` 防止丢包
+
+**事件录制**：
+- 记录所有终端交互事件（input/output/resize/metadata）
+- 支持回放功能
+- 用于录制文件格式（JSON）和视频导出
+
+**关键文件**：
+
+前端录制组件：
+- `src/lib/recorder/VideoRecorder.ts` - 视频录制器
+- `src/lib/recorder/TerminalRecorder.ts` - 事件录制器
+- `src/lib/recorder/VideoExporter.ts` - 视频导出器
+- `src/lib/recorder/PlaybackEngine.ts` - 回放引擎
+- `src/lib/recorder/RecordingFormat.ts` - 格式工具
+
+前端音频组件：
+- `src/lib/audio/AudioCaptureManager.ts` - 音频捕获管理器
+- `src/lib/audio/pcm-processor.worklet.ts` - PCM 音频处理器（AudioWorklet）
+
+前端 UI 组件：
+- `src/components/recording/RecordingControls.tsx` - 录制控制
+- `src/components/recording/RecordingIndicator.tsx` - 录制指示器
+- `src/components/recording/RecordingManager.tsx` - 录制文件管理
+- `src/components/recording/VideoExportDialog.tsx` - 视频导出对话框
+
+后端录制相关：
+- `src-tauri/src/audio/capturer.rs` - 系统音频捕获器（Windows WASAPI）
+- `src-tauri/src/audio/mod.rs` - 音频模块导出
+- `src-tauri/src/commands/audio.rs` - 音频命令（启动/停止/列表设备）
+- `src-tauri/src/commands/recording.rs` - 录制命令（保存/加载视频）
+
+状态管理：
+- `src/store/recordingStore.ts` - 录制会话和文件管理
+
+**音频录制优化要点**：
+
+当调试或改进音频录制时，注意以下关键配置：
+
+1. **音频缓冲区大小** (`src-tauri/src/commands/audio.rs:32`)
+   - 当前设置：300 个音频包（约 5 秒）
+   - 过小会导致数据丢失，过大会增加延迟
+
+2. **音频包大小** (`src-tauri/src/audio/capturer.rs:78-94`)
+   - 当前设置：960 样本（20ms @ 48kHz）
+   - 影响 Tauri IPC 事件频率和 CPU 使用率
+
+3. **音量增益** (`src-tauri/src/audio/capturer.rs`)
+   - 扬声器默认增益：2.0x（WASAPI Loopback 音量较低）
+   - 增益后限制在 [-1.0, 1.0] 防止削波
+
+4. **发送模式** (`src-tauri/src/audio/capturer.rs:174`)
+   - 使用阻塞发送 `sender.send()` 确保不丢包
+   - 不要使用 `try_send()`，缓冲区满时会直接丢弃数据
+
+5. **前端 Worklet 缓冲区** (`src/lib/audio/pcm-processor.worklet.ts`)
+   - 缓冲区大小：288000 样本（3 秒）
+   - 包含缓冲区使用率监控日志（每 5 秒报告一次）
+
+**完整录制流程**：
+
+1. **准备阶段**：捕获初始终端内容（包括提示符）
+2. **倒计时**：2 秒倒计时
+3. **启动录制**：
+   - `TerminalRecorder` 开始记录事件
+   - `VideoRecorder` 开始从 Canvas 捕获视频流
+   - `AudioCaptureManager` 开始捕获音频（麦克风 + 扬声器）
+4. **录制中**：
+   - 终端输出同时写入 VideoRecorder
+   - 麦克风和扬声器音频通过 AudioContext 混合
+   - MediaRecorder 将视频+音频流编码为 WebM/MP4
+5. **停止录制**：
+   - 停止所有录制器
+   - 保存录制文件（JSON）
+   - 保存视频 Blob 到磁盘
+   - 清理资源
+
+### SFTP 文件传输系统
+
+应用包含完整的 SFTP 文件传输功能，支持双窗格文件管理。
+
+**关键文件**：
+- `src-tauri/src/sftp/` - SFTP 后端实现
+- `src-tauri/src/ssh/backends/russh.rs` - Russh SFTP 通道
+- `src/components/sftp/` - SFTP 前端组件
+- `src/store/sftpStore.ts` - SFTP 状态管理
+
+**特性**：
+- 双窗格文件浏览（本地/远程）
+- 文件上传/下载
+- 目录创建/删除
+- 文件重命名
+- 文件权限管理
+- 传输进度显示
+
+### 快捷键系统
+
+应用支持丰富的快捷键配置，详见 `docs/Shortcuts.md`。
+
+**关键文件**：
+- `src/store/keybindingStore.ts` - 快捷键状态管理
+- `src/lib/keybindingActions.ts` - 快捷键动作定义
+- `src/components/keybindings/` - 快捷键设置 UI
+
+**快捷键范围**：
+- 全局快捷键（如 Ctrl+T 新建标签）
+- 终端快捷键（复制、粘贴等）
+- SFTP 快捷键
+- 录制快捷键
+
+### russh 纯 Rust SSH 后端
+
+除了系统 SSH 后端，项目还集成了 russh 纯 Rust SSH 实现。
+
+**关键文件**：
+- `src-tauri/src/ssh/backends/russh.rs` - Russh SSH 后端实现
+- `src-tauri/src/ssh/backends/sftp_channel.rs` - SFTP 通道实现
+
+**特性**：
+- 纯 Rust 实现，不依赖系统 SSH
+- 支持所有标准 SSH 功能
+- 内置 SFTP 支持
+- 更好的跨平台兼容性
 
 ## 常见任务
 
@@ -388,6 +601,29 @@ const message = await invoke('greet', { name: 'World' });
    - 检查 Vite 开发服务器是否正常运行
    - 检查端口 1420 是否被占用
 
+5. **扬声器录制质量差或无声**
+   - 检查系统音频输出设备是否正常工作
+   - 确认音频在扬声器录制前有声音输出
+   - 查看浏览器控制台 `[PCMProcessor] Buffer stats` 日志
+     - 如果 `underflowSamples` 持续 > 0，说明缓冲区为空
+     - 如果 `usage` 持续 > 90%，说明缓冲区积压
+   - 检查 Rust 后端日志，确认音频捕获是否正常启动
+   - Windows 用户：确保使用 WASAPI Loopback 模式（默认）
+
+6. **音频录制延迟**
+   - 减小音频缓冲区大小（`src-tauri/src/commands/audio.rs:32`）
+   - 减小音频包大小（`src-tauri/src/audio/capturer.rs` 的 `buffer_size`）
+
+7. **录制视频卡顿**
+   - 降低视频质量设置（Low/Medium）
+   - 使用 WebGL 渲染器（已默认启用）
+   - 检查 Canvas 捕获帧率（默认 30 FPS）
+
+8. **录制文件过大**
+   - 降低视频质量设置
+   - 缩短录制时长
+   - 使用 Medium 或 Low 音频质量
+
 ## 贡献指南
 
 1. Fork 项目
@@ -411,4 +647,4 @@ MIT License
 
 ---
 
-**最后更新**：2026年1月20日
+**最后更新**：2026年1月27日

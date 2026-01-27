@@ -45,6 +45,7 @@ export const useTerminalConfigStore = create<TerminalConfigStore>((set, get) => 
         recordSpeaker: newConfig.recordSpeaker,
         audioQuality: newConfig.audioQuality,
         audioSampleRate: newConfig.audioSampleRate,
+        appTheme: newConfig.appTheme,
       },
     });
   },

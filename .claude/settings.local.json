@@ -6,7 +6,8 @@
       "Bash(cargo check:*)",
       "Bash(find:*)",
       "Bash(xargs:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "Skill(frontend-design:frontend-design)"
     ]
   }
 }

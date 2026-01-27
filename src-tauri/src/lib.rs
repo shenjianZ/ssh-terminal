@@ -77,6 +77,7 @@ pub fn run() {
             commands::storage_session_delete,
             commands::storage_config_save,
             commands::storage_config_load,
+            commands::storage_config_get_default,
             commands::storage_keybindings_save,
             commands::storage_keybindings_load,
             commands::storage_keybindings_import,
