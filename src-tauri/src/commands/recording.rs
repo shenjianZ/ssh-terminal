@@ -88,6 +88,9 @@ pub struct RecordingMetadata {
     pub file_size: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub terminal_config: Option<TerminalConfig>,
+    /// 关联的视频文件路径（相对于 recordings 目录）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub video_file: Option<String>,
 }
 
 /// 录制文件
@@ -303,20 +306,84 @@ pub async fn recording_delete(
 ) -> std::result::Result<(), String> {
     let recordings_dir = get_recordings_dir(&app).map_err(|e| e.to_string())?;
 
-    // 查找文件
-    let file_path = recordings_dir.join(format!("{}.json", file_id));
+    // 查找 JSON 文件
+    let json_path = recordings_dir.join(format!("{}.json", file_id));
 
-    if !file_path.exists() {
+    if !json_path.exists() {
         return Err(format!("Recording file not found: {}", file_id));
     }
 
-    // 删除文件
-    fs::remove_file(&file_path)
+    // 加载录制文件以查找关联的视频文件
+    if let Ok(recording_file) = load_recording_file_from_path(&json_path) {
+        if let Some(video_file) = recording_file.metadata.video_file {
+            let video_path = recordings_dir.join(&video_file);
+            if video_path.exists() {
+                let _ = fs::remove_file(&video_path);
+                println!("[Recording] Deleted video file: {}", video_file);
+            }
+        }
+    }
+
+    // 删除 JSON 文件
+    fs::remove_file(&json_path)
         .map_err(|e| format!("Failed to delete recording file: {}", e))?;
 
     println!("[Recording] Deleted recording file: {}", file_id);
 
     Ok(())
+}
+
+/// 保存视频文件（Blob 数据）到磁盘
+#[tauri::command]
+pub async fn recording_save_video(
+    app: AppHandle,
+    recording_id: String,
+    video_data: Vec<u8>,
+    file_extension: String,
+) -> std::result::Result<String, String> {
+    let recordings_dir = get_recordings_dir(&app).map_err(|e| e.to_string())?;
+
+    // 生成视频文件名
+    let video_filename = format!("{}.{}", recording_id, file_extension);
+    let video_path = recordings_dir.join(&video_filename);
+
+    // 写入视频数据
+    fs::write(&video_path, video_data)
+        .map_err(|e| format!("Failed to write video file: {}", e))?;
+
+    println!(
+        "[Recording] Saved video file: {} ({} bytes)",
+        video_path.display(),
+        video_path.metadata().map(|m| m.len()).unwrap_or(0)
+    );
+
+    // 返回相对于 recordings 目录的路径
+    Ok(video_filename)
+}
+
+/// 加载视频文件数据
+#[tauri::command]
+pub async fn recording_load_video(
+    app: AppHandle,
+    video_filename: String,
+) -> std::result::Result<Vec<u8>, String> {
+    let recordings_dir = get_recordings_dir(&app).map_err(|e| e.to_string())?;
+    let video_path = recordings_dir.join(&video_filename);
+
+    if !video_path.exists() {
+        return Err(format!("Video file not found: {}", video_filename));
+    }
+
+    let video_data = fs::read(&video_path)
+        .map_err(|e| format!("Failed to read video file: {}", e))?;
+
+    println!(
+        "[Recording] Loaded video file: {} ({} bytes)",
+        video_filename,
+        video_data.len()
+    );
+
+    Ok(video_data)
 }
 
 /// 更新录制文件元数据

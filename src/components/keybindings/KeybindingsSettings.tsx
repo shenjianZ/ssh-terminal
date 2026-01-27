@@ -59,32 +59,52 @@ export function KeybindingsSettings() {
   const handleExport = async () => {
     try {
       const configJson = await exportConfig();
-      const blob = new Blob([configJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `keybindings-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      // 使用 Tauri 的文件对话框选择保存位置
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+
+      const filePath = await save({
+        filters: [
+          {
+            name: 'JSON Files',
+            extensions: ['json']
+          }
+        ],
+        defaultPath: `keybindings-${new Date().toISOString().slice(0, 10)}.json`
+      });
+
+      if (filePath) {
+        await writeTextFile(filePath, configJson);
+      }
     } catch (error) {
       console.error('导出失败:', error);
     }
   };
 
   const handleImport = async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
+    try {
+      // 使用 Tauri 的文件对话框选择导入文件
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const { readTextFile } = await import('@tauri-apps/plugin-fs');
 
-      const text = await file.text();
-      await importConfig(text);
-    };
-    input.click();
+      const filePath = await open({
+        filters: [
+          {
+            name: 'JSON Files',
+            extensions: ['json']
+          }
+        ],
+        multiple: false
+      });
+
+      if (filePath) {
+        const text = await readTextFile(filePath as string);
+        await importConfig(text);
+      }
+    } catch (error) {
+      console.error('导入失败:', error);
+    }
   };
 
   return (

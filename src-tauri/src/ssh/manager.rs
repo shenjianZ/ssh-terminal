@@ -509,7 +509,7 @@ impl SSHManager {
 
         // 获取 backend
         let backend_guard = connection.backend.lock().await;
-        let backend = backend_guard.as_ref()
+        let _backend = backend_guard.as_ref()
             .ok_or_else(|| SSHError::NotConnected)?;
 
         // 尝试获取 RusshBackend 的 handle

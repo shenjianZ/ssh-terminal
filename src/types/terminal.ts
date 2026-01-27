@@ -43,4 +43,8 @@ export interface TerminalConfig {
   /** 通知设置 */
   notificationsEnabled: boolean;
   soundEffectsEnabled: boolean;
+  /** 视频录制质量 */
+  videoQuality: 'low' | 'medium' | 'high';
+  /** 视频录制格式 */
+  videoFormat: 'webm' | 'mp4';
 }

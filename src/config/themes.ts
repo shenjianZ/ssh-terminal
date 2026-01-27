@@ -232,6 +232,8 @@ export const DEFAULT_TERMINAL_CONFIG: TerminalConfig = {
   keepAliveInterval: 30,
   notificationsEnabled: true,
   soundEffectsEnabled: true,
+  videoQuality: 'medium',
+  videoFormat: 'webm',
 };
 
 // 可用字体列表

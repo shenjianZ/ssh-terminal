@@ -8,6 +8,7 @@ import { XTermWrapper } from '@/components/terminal/XTermWrapper';
 import { ErrorBoundary } from '@/components/terminal/ErrorBoundary';
 import { QuickConnectDialog } from '@/components/session/QuickConnectDialog';
 import { ConnectionStatusBadge } from '@/components/ssh/ConnectionStatusBadge';
+import { RecordingControls, RecordingManager } from '@/components/recording';
 import { useSessionStore } from '@/store/sessionStore';
 import { useTerminalStore } from '@/store/terminalStore';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
@@ -19,6 +20,7 @@ export function Terminal() {
   const location = useLocation();
   const [quickConnectOpen, setQuickConnectOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showRecordingManager, setShowRecordingManager] = useState(false);
   const { sessions, loadSessions, loadSessionsFromStorage, createTemporaryConnection, connectSession, disconnectSession, isStorageLoaded } = useSessionStore();
   const { tabs, addTab, getActiveTab, focusTerminal } = useTerminalStore();
   const { config: terminalConfig } = useTerminalConfigStore();
@@ -218,6 +220,27 @@ export function Terminal() {
           会话管理
         </Button>
 
+        <Separator orientation="vertical" className="h-5" />
+
+        {/* 录制控制 */}
+        {activeTab && (
+          <RecordingControls
+            connectionId={activeTab.connectionId}
+            sessionName={activeSession?.name}
+          />
+        )}
+
+        {/* 录制管理器按钮 - 始终显示 */}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowRecordingManager(true)}
+          className="gap-1.5"
+        >
+          <FolderOpen className="h-4 w-4" />
+          录制管理
+        </Button>
+
         <div className="flex-1" />
 
         {/* 显示当前连接信息 */}
@@ -278,6 +301,15 @@ export function Terminal() {
         onOpenChange={setQuickConnectOpen}
         onConnect={handleQuickConnect}
       />
+
+      {/* 录制文件管理器 */}
+      {showRecordingManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+          <div className="w-full h-full max-w-7xl max-h-[90vh] my-auto">
+            <RecordingManager onClose={() => setShowRecordingManager(false)} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

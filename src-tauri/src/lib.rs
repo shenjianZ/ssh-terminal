@@ -68,6 +68,10 @@ pub fn run() {
             commands::storage_session_delete,
             commands::storage_config_save,
             commands::storage_config_load,
+            commands::storage_keybindings_save,
+            commands::storage_keybindings_load,
+            commands::storage_keybindings_import,
+            commands::storage_keybindings_reset,
             // SFTP 文件管理命令
             commands::sftp_list_dir,
             commands::sftp_create_dir,
@@ -89,6 +93,8 @@ pub fn run() {
             commands::recording_list,
             commands::recording_delete,
             commands::recording_update_metadata,
+            commands::recording_save_video,
+            commands::recording_load_video,
             // 文件系统命令
             commands::fs_write_file,
         ])

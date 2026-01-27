@@ -146,7 +146,7 @@ impl Storage {
     }
 
     /// 获取存储目录
-    fn get_storage_dir(app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf> {
+    fn get_storage_dir(_app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf> {
         #[cfg(target_os = "android")]
         {
             // Android: 使用Tauri的PathResolver API

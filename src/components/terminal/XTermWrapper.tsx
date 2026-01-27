@@ -198,8 +198,6 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
       const terminalElement = (terminal as unknown as { element?: HTMLElement }).element;
       const currentContainer = terminalRef.current;
 
-      console.log(`[XTermWrapper] Connection ${currentConnectionId}: terminalElement`, terminalElement?.parentNode === currentContainer ? 'already in correct container' : 'needs to be moved');
-
       // 如果终端已经打开且绑定到不同的容器，需要移动 DOM（不调用 open，避免清空内容）
       if (terminalElement && terminalElement.parentNode !== currentContainer) {
         // 检查当前容器是否为空，如果不为空说明有其他内容
@@ -210,8 +208,6 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
         // 将终端元素移动到新容器（不调用 open，避免清空内容）
         currentContainer.innerHTML = '';
         currentContainer.appendChild(terminalElement);
-
-        console.log(`[XTermWrapper] Moved terminal element for ${currentConnectionId} to new container`);
 
         // 更新 store 中的容器引用
         setTerminalInstance(currentConnectionId, {
@@ -461,7 +457,6 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
       // 关键：不在这里销毁终端实例，也不调用 terminal.dispose()
       // 终端实例和 DOM 元素都保留，只是组件卸载
       // 只有当标签页被关闭时，store 才会销毁实例
-      console.log(`[XTermWrapper] Cleanup complete for connection: ${currentConnectionId} (instance and DOM preserved)`);
     };
   }, [connectionId, config, theme, getTerminalInstance, setTerminalInstance]);
 
