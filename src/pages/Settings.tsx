@@ -22,9 +22,11 @@ import { soundManager, playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { invoke } from '@tauri-apps/api/core';
+import type { TerminalConfig } from '@/types/terminal';
 
 export function Settings() {
-  const { config, setConfig, loadConfig, resetConfig } = useTerminalConfigStore();
+  const { config, setConfig, loadConfig } = useTerminalConfigStore();
   const [settings, setSettings] = useState({
     // 终端设置
     terminalFont: 'monospace',
@@ -83,7 +85,7 @@ export function Settings() {
             size="sm"
             onClick={async () => {
               try {
-                const defaultConfig = await invoke('storage_config_get_default');
+                const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
                 await setConfig(defaultConfig);
                 playSound(SoundEffect.SUCCESS);
               } catch (error) {
@@ -134,7 +136,7 @@ export function Settings() {
               size="sm"
               onClick={async () => {
                 try {
-                  const defaultConfig = await invoke('storage_config_get_default');
+                  const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
                   await setConfig(defaultConfig);
                   playSound(SoundEffect.SUCCESS);
                 } catch (error) {
@@ -209,7 +211,7 @@ export function Settings() {
               size="sm"
               onClick={async () => {
                 try {
-                  const defaultConfig = await invoke('storage_config_get_default');
+                  const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
                   await setConfig(defaultConfig);
                   playSound(SoundEffect.SUCCESS);
                 } catch (error) {

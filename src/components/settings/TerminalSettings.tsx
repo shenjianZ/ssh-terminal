@@ -16,6 +16,7 @@ import { ResetIcon, MinusIcon, PlusIcon } from '@radix-ui/react-icons';
 import { playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
 import { invoke } from '@tauri-apps/api/core';
+import type { TerminalConfig } from '@/types/terminal';
 
 interface SliderControlProps {
   label: string;
@@ -83,11 +84,11 @@ function SliderControl({ label, value, unit, min, max, step, onChange }: SliderC
 }
 
 export function TerminalSettings() {
-  const { config, setConfig, setTheme, resetConfig } = useTerminalConfigStore();
+  const { config, setConfig, setTheme } = useTerminalConfigStore();
 
   const handleReset = async () => {
     try {
-      const defaultConfig = await invoke('storage_config_get_default');
+      const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
       await setConfig(defaultConfig);
       playSound(SoundEffect.SUCCESS);
     } catch (error) {
