@@ -43,9 +43,11 @@ jobs:
         run: pnpm install
       - name: Sync version from package.json
         run: |
-          VERSION=$(node -p "require('../package.json').version")
+          VERSION=$(node -p "require('${GITHUB_WORKSPACE}/package.json').version")
           echo "Syncing version: v${VERSION}"
           sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v${VERSION}/g" src/config/version.ts
+          echo "Updated version.ts:"
+          cat src/config/version.ts
       - name: Build
         run: pnpm build
       - name: Upload artifact
