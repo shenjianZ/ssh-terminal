@@ -45,8 +45,7 @@ jobs:
         run: |
           VERSION=$(node -p "require('../package.json').version")
           echo "Syncing version: v${VERSION}"
-          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v${VERSION}/g" src/App.tsx
-          echo "{\"version\":\"${VERSION}\"}" > version.json
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v${VERSION}/g" src/config/version.ts
       - name: Build
         run: pnpm build
       - name: Upload artifact
