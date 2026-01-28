@@ -22,6 +22,7 @@ export const DEFAULT_KEYBINDINGS: Record<string, KeyCombination> = {
   'terminal.zoomIn': { ctrl: true, alt: false, shift: false, key: 'Equal' },
   'terminal.zoomOut': { ctrl: true, alt: false, shift: false, key: 'Minus' },
   'terminal.zoomReset': { ctrl: true, alt: false, shift: false, key: 'Digit0' },
+  'terminal.openNLToCmd': { ctrl: false, alt: false, shift: true, key: 'Digit3' }, // Shift+#
 
   // SFTP快捷键
   'sftp.upload': { ctrl: true, alt: false, shift: false, key: 'KeyU' },

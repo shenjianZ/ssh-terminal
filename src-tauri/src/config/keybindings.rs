@@ -150,6 +150,9 @@ impl KeybindingsStorageManager {
         keybindings.insert("terminal.zoomReset".to_string(), KeyCombination {
             ctrl: true, alt: false, shift: false, key: "Digit0".to_string(),
         });
+        keybindings.insert("terminal.openNLToCmd".to_string(), KeyCombination {
+            ctrl: false, alt: false, shift: true, key: "Digit3".to_string(), // Shift+#
+        });
 
         // SFTP 快捷键
         keybindings.insert("sftp.upload".to_string(), KeyCombination {

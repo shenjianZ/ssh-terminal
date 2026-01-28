@@ -8,6 +8,7 @@ import { SftpManager } from "@/pages/SftpManager";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { useTerminalConfigStore } from "@/store/terminalConfigStore";
+import { useAIStore } from "@/store/aiStore";
 import { useSidebarStore } from "@/store/sidebarStore";
 import { MobileLayout } from "@/components/mobile/MobileLayout";
 import { MobileSessionList } from "@/components/mobile/MobileSessionList";
@@ -19,11 +20,13 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const loadConfig = useTerminalConfigStore(state => state.loadConfig);
+  const loadAIConfig = useAIStore(state => state.loadConfig);
   const toggleSidebar = useSidebarStore(state => state.toggleSidebar);
 
   useEffect(() => {
     loadConfig();
-  }, [loadConfig]);
+    loadAIConfig();
+  }, [loadConfig, loadAIConfig]);
 
   // 更新全局快捷键处理器的当前路径
   useEffect(() => {

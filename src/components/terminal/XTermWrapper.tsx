@@ -9,6 +9,7 @@ import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { useTerminalStore } from '@/store/terminalStore';
 import { useKeybindingStore } from '@/store/keybindingStore';
 import { HostKeyConfirmDialog } from '@/components/ssh/HostKeyConfirmDialog';
+import { NLToCommandDialog } from '@/components/ai/command/NLToCommandDialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { normalizeKeyCombo } from '@/lib/keybindingParser';
 import { keybindingActionExecutor } from '@/lib/keybindingActions';
@@ -34,6 +35,9 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
   const [tempFontSize, setTempFontSize] = useState<number | null>(null); // 仅用于触发重新渲染
   const [showSearchDialog, setShowSearchDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // NL2CMD 对话框状态
+  const [showNLToCmdDialog, setShowNLToCmdDialog] = useState(false);
 
   // 主机密钥确认对话框状态
   const [hostKeyDialog, setHostKeyDialog] = useState({
@@ -516,6 +520,39 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
     }
   }, [config, theme, isReady, tempFontSize]);
 
+  // 监听 NL2CMD 触发事件
+  useEffect(() => {
+    const handleNLToCmdTrigger = (event: Event) => {
+      const customEvent = event as CustomEvent<{ connectionId: string }>;
+      if (customEvent.detail.connectionId === connectionId) {
+        setShowNLToCmdDialog(true);
+      }
+    };
+
+    window.addEventListener('terminal-nl2cmd-trigger', handleNLToCmdTrigger);
+
+    return () => {
+      window.removeEventListener('terminal-nl2cmd-trigger', handleNLToCmdTrigger);
+    };
+  }, [connectionId]);
+
+  // 监听快捷键触发的 NL2CMD 事件
+  useEffect(() => {
+    const handleKeybindingNLToCmd = () => {
+      // 检查当前是否有活跃的终端标签
+      const activeTab = useTerminalStore.getState().getActiveTab();
+      if (activeTab && activeTab.connectionId === connectionId) {
+        setShowNLToCmdDialog(true);
+      }
+    };
+
+    window.addEventListener('keybinding-terminal-open-nl2cmd', handleKeybindingNLToCmd);
+
+    return () => {
+      window.removeEventListener('keybinding-terminal-open-nl2cmd', handleKeybindingNLToCmd);
+    };
+  }, [connectionId]);
+
   // 处理复制操作
   const handleCopy = async () => {
     if (terminalRefInstance.current && terminalRefInstance.current.hasSelection()) {
@@ -584,6 +621,23 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
       setTempFontSize(newSize);
       // 立即应用到终端
       terminalRefInstance.current.options.fontSize = newSize;
+    }
+  };
+
+  // 处理 NL2CMD 命令确认
+  const handleNLToCmdConfirm = async (command: string) => {
+    if (terminalRefInstance.current) {
+      // 直接执行生成的命令（`#` 被拦截了，没有发送到终端）
+      await invoke('terminal_write', {
+        sessionId: connectionId,
+        data: new TextEncoder().encode(command),
+      });
+
+      // 发送回车
+      await invoke('terminal_write', {
+        sessionId: connectionId,
+        data: new TextEncoder().encode('\r'),
+      });
     }
   };
 
@@ -751,6 +805,14 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
           // 重置标志
           dialogShownRef.current = false;
         }}
+      />
+
+      {/* NL2CMD 对话框 */}
+      <NLToCommandDialog
+        open={showNLToCmdDialog}
+        onOpenChange={setShowNLToCmdDialog}
+        onConfirm={handleNLToCmdConfirm}
+        connectionId={connectionId}
       />
 
       {/* 搜索对话框 */}

@@ -161,6 +161,13 @@ export const KEYBINDING_ACTIONS: KeybindingAction[] = [
     category: 'terminal',
     defaultKeybinding: { ctrl: true, alt: false, shift: false, key: 'Digit0' }, // Ctrl+0
   },
+  {
+    id: 'terminal.openNLToCmd',
+    name: 'AI 生成命令',
+    description: '打开 AI 自然语言转命令面板（Shift+#）',
+    category: 'terminal',
+    defaultKeybinding: { ctrl: false, alt: false, shift: true, key: 'Digit3' }, // Shift+#
+  },
 
   // SFTP快捷键
   {

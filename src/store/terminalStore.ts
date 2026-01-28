@@ -303,6 +303,16 @@ export const useTerminalStore = create<TerminalStore>((set, get) => ({
       if (currentInstance?.terminal === terminal &&
           currentInstance?.onDataHandler === onDataHandler) {
 
+        // 检测 NL2CMD 前缀 `#`
+        if (data === '#') {
+          // 触发 NL2CMD 对话框（通过全局事件）
+          const event = new CustomEvent('terminal-nl2cmd-trigger', {
+            detail: { connectionId },
+          });
+          window.dispatchEvent(event);
+          return; // 不发送 # 到终端
+        }
+
         // 录制输入事件
         useRecordingStore.getState().recordInput(connectionId, data);
 

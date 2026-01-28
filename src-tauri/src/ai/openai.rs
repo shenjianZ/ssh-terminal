@@ -101,9 +101,16 @@ impl AIProvider for OpenAIProvider {
         }
 
         let openai_response: OpenAIResponse = response.json().await?;
-        tracing::info!("[OpenAI] Request successful, response length: {} chars",
-            openai_response.choices[0].message.content.len());
-        Ok(openai_response.choices[0].message.content.clone())
+
+        let content = &openai_response.choices[0].message.content;
+        let content_preview = if content.len() > 200 {
+            format!("{}... (truncated, {} chars total)", &content[..200], content.len())
+        } else {
+            content.clone()
+        };
+
+        tracing::info!("[OpenAI] Response: {}", content_preview);
+        Ok(content.clone())
     }
 
     /// 测试 OpenAI API 连接

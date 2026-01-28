@@ -59,6 +59,9 @@ export class KeybindingActionExecutor {
       case 'terminal.zoomReset':
         return this.executeTerminalZoomReset();
 
+      case 'terminal.openNLToCmd':
+        return this.executeTerminalOpenNLToCmd();
+
       // ========== SFTP 快捷键 ==========
       case 'sftp.upload':
         return this.executeSftpUpload();
@@ -373,6 +376,22 @@ export class KeybindingActionExecutor {
       return true;
     } catch (error) {
       console.error('[KeybindingExecutor] Error resetting zoom:', error);
+      return false;
+    }
+  }
+
+  /**
+   * 打开 AI 自然语言转命令面板
+   */
+  private async executeTerminalOpenNLToCmd(): Promise<boolean> {
+    try {
+      // 触发 NL2CMD 面板事件，由 XTermWrapper 监听并处理
+      const event = new CustomEvent('keybinding-terminal-open-nl2cmd');
+      window.dispatchEvent(event);
+      console.log('[KeybindingExecutor] Triggered NL2CMD panel');
+      return true;
+    } catch (error) {
+      console.error('[KeybindingExecutor] Error opening NL2CMD panel:', error);
       return false;
     }
   }

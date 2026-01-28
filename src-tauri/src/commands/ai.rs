@@ -39,11 +39,6 @@ pub async fn ai_chat(
     config: AIProviderConfig,
     messages: Vec<ChatMessage>,
 ) -> Result<String, String> {
-    tracing::info!("[AI] Chat request - Provider type: {}", config.provider_type);
-    tracing::info!("[AI] Chat request - Model: {}", config.model);
-    tracing::info!("[AI] Chat request - Temperature: {:?}", config.temperature);
-    tracing::info!("[AI] Chat request - Max tokens: {:?}", config.max_tokens);
-
     // 创建 provider 实例
     let provider: Box<dyn AIProvider> = match config.provider_type.as_str() {
         "ollama" => {

@@ -119,9 +119,16 @@ impl AIProvider for OllamaProvider {
         }
 
         let ollama_response: OllamaResponse = response.json().await?;
-        tracing::info!("[Ollama] Request successful, response length: {} chars",
-            ollama_response.response.len());
-        Ok(ollama_response.response)
+
+        let content = &ollama_response.response;
+        let content_preview = if content.len() > 200 {
+            format!("{}... (truncated, {} chars total)", &content[..200], content.len())
+        } else {
+            content.clone()
+        };
+
+        tracing::info!("[Ollama] Response: {}", content_preview);
+        Ok(content.clone())
     }
 
     /// 测试 Ollama 服务连接
