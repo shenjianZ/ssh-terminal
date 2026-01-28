@@ -45,8 +45,13 @@ jobs:
         run: |
           VERSION=$(node -p "require('${GITHUB_WORKSPACE}/package.json').version")
           echo "Syncing version: v${VERSION}"
-          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/v${VERSION}/g" src/config/version.ts
+          # Use sed with extended regex to replace version
+          sed -i -E "s/v[0-9]+\.[0-9]+\.[0-9]+/v${VERSION}/g" src/config/version.ts
           echo "Updated version.ts:"
+          cat src/config/version.ts
+      - name: Verify version update
+        run: |
+          echo "Checking version.ts content:"
           cat src/config/version.ts
       - name: Build
         run: pnpm build
