@@ -10,27 +10,27 @@ import {
 
 const screenshots = [
   {
-    src: '/screenshots/terminal.png',
+    src: '/ssh-terminal/screenshots/terminal.png',
     alt: '终端界面',
     description: '支持多标签页的终端界面，深色主题'
   },
   {
-    src: '/screenshots/terminal-noconnection.png',
+    src: '/ssh-terminal/screenshots/terminal-noconnection.png',
     alt: '未连接状态',
     description: '优雅的未连接状态提示'
   },
   {
-    src: '/screenshots/session-manage.png',
+    src: '/ssh-terminal/screenshots/session-manage.png',
     alt: '会话管理',
     description: '卡片式会话管理，支持分组和快速连接'
   },
   {
-    src: '/screenshots/settings-1.png',
+    src: '/ssh-terminal/screenshots/settings-1.png',
     alt: '终端设置',
     description: '丰富的终端配置选项'
   },
   {
-    src: '/screenshots/settings-2.png',
+    src: '/ssh-terminal/screenshots/settings-2.png',
     alt: '主题设置',
     description: '8 种精美主题可选'
   },
