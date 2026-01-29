@@ -1,10 +1,9 @@
 // AI 相关 Tauri 命令
 
-use crate::ai::{AIProvider, OpenAIProvider, OllamaProvider, ChatMessage};
+use crate::ai::{ChatMessage, AIProviderManager, OpenAIProvider};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, State};
 
 /// AI Provider 配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,15 +20,20 @@ pub struct AIProviderConfig {
 
 /// AI Manager 状态
 pub struct AIManagerState {
-    // 这里可以缓存 provider 实例
-    providers: Arc<Mutex<Vec<String>>>,
+    /// AI Provider 管理器，负责缓存和复用 Provider 实例
+    manager: Arc<AIProviderManager>,
 }
 
 impl AIManagerState {
     pub fn new() -> Self {
         Self {
-            providers: Arc::new(Mutex::new(Vec::new())),
+            manager: Arc::new(AIProviderManager::new()),
         }
+    }
+
+    /// 获取 Provider 管理器的引用
+    pub fn manager(&self) -> &Arc<AIProviderManager> {
+        &self.manager
     }
 }
 
@@ -69,31 +73,14 @@ pub async fn ai_chat_stream(
 /// AI 聊天命令（非流式，保持兼容）
 #[tauri::command]
 pub async fn ai_chat(
+    ai_manager: State<'_, AIManagerState>,
     config: AIProviderConfig,
     messages: Vec<ChatMessage>,
 ) -> Result<String, String> {
-    // 创建 provider 实例
-    let provider: Box<dyn AIProvider> = match config.provider_type.as_str() {
-        "ollama" => {
-            Box::new(OllamaProvider::new(
-                config.base_url,
-                config.model,
-                config.temperature,
-                config.max_tokens,
-            ))
-        }
-        _ => {
-            // 默认使用 OpenAI 兼容接口（适用于大多数 AI 服务）
-            let api_key = config.api_key.ok_or("API key is required".to_string())?;
-            Box::new(OpenAIProvider::new(
-                api_key,
-                config.base_url,
-                config.model,
-                config.temperature,
-                config.max_tokens,
-            ))
-        }
-    };
+    // 使用管理器获取或创建 provider 实例（自动缓存复用）
+    let provider = ai_manager.manager()
+        .get_or_create_provider(&config)
+        .map_err(|e| e.to_string())?;
 
     // 调用 chat 方法
     provider.chat(messages).await.map_err(|e| e.to_string())
@@ -102,6 +89,7 @@ pub async fn ai_chat(
 /// AI 命令解释
 #[tauri::command]
 pub async fn ai_explain_command(
+    ai_manager: State<'_, AIManagerState>,
     command: String,
     config: AIProviderConfig,
 ) -> Result<String, String> {
@@ -132,12 +120,13 @@ pub async fn ai_explain_command(
         },
     ];
 
-    ai_chat(config, messages).await
+    ai_chat(ai_manager, config, messages).await
 }
 
 /// AI 自然语言转命令
 #[tauri::command]
 pub async fn ai_generate_command(
+    ai_manager: State<'_, AIManagerState>,
     input: String,
     config: AIProviderConfig,
 ) -> Result<String, String> {
@@ -165,12 +154,13 @@ pub async fn ai_generate_command(
         },
     ];
 
-    ai_chat(config, messages).await
+    ai_chat(ai_manager, config, messages).await
 }
 
 /// AI 错误分析
 #[tauri::command]
 pub async fn ai_analyze_error(
+    ai_manager: State<'_, AIManagerState>,
     error: String,
     config: AIProviderConfig,
 ) -> Result<String, String> {
@@ -201,12 +191,13 @@ pub async fn ai_analyze_error(
         },
     ];
 
-    ai_chat(config, messages).await
+    ai_chat(ai_manager, config, messages).await
 }
 
 /// 测试 AI 连接
 #[tauri::command]
 pub async fn ai_test_connection(
+    ai_manager: State<'_, AIManagerState>,
     config: AIProviderConfig,
 ) -> Result<bool, String> {
     tracing::info!("[AI] Testing connection for provider type: {}", config.provider_type);
@@ -215,28 +206,13 @@ pub async fn ai_test_connection(
     tracing::info!("[AI] Provider config - temperature: {:?}, max_tokens: {:?}",
         config.temperature, config.max_tokens);
 
-    let provider: Box<dyn AIProvider> = match config.provider_type.as_str() {
-        "ollama" => {
-            tracing::info!("[AI] Creating Ollama provider");
-            Box::new(OllamaProvider::new(
-                config.base_url,
-                config.model,
-                config.temperature,
-                config.max_tokens,
-            ))
-        }
-        _ => {
-            tracing::info!("[AI] Creating OpenAI-compatible provider for type: {}", config.provider_type);
-            let api_key = config.api_key.ok_or("API key is required".to_string())?;
-            Box::new(OpenAIProvider::new(
-                api_key,
-                config.base_url,
-                config.model,
-                config.temperature,
-                config.max_tokens,
-            ))
-        }
-    };
+    // 使用管理器获取或创建 provider 实例
+    let provider = ai_manager.manager()
+        .get_or_create_provider(&config)
+        .map_err(|e| {
+            tracing::error!("[AI] Failed to get provider: {}", e);
+            e
+        })?;
 
     tracing::info!("[AI] Calling provider test_connection");
     let result = provider.test_connection().await.map_err(|e| {
@@ -246,4 +222,88 @@ pub async fn ai_test_connection(
 
     tracing::info!("[AI] Test connection result: {}", result);
     Ok(result)
+}
+
+/// 清除 AI Provider 缓存
+///
+/// 当配置更改或需要强制重新创建 Provider 时使用
+#[tauri::command]
+pub async fn ai_clear_cache(
+    ai_manager: State<'_, AIManagerState>,
+) -> Result<(), String> {
+    ai_manager.manager().clear_cache();
+    tracing::info!("[AI] Cache cleared via command");
+    Ok(())
+}
+
+/// 获取缓存信息
+///
+/// 返回缓存的 Provider 数量和列表
+#[tauri::command]
+pub async fn ai_get_cache_info(
+    ai_manager: State<'_, AIManagerState>,
+) -> Result<CacheInfo, String> {
+    let size = ai_manager.manager().cache_size();
+    let providers = ai_manager.manager().list_cached_providers();
+
+    Ok(CacheInfo {
+        cache_size: size,
+        cached_providers: providers,
+    })
+}
+
+/// 缓存信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheInfo {
+    /// 缓存的 Provider 数量
+    pub cache_size: usize,
+    /// 缓存的 Provider key 列表
+    pub cached_providers: Vec<String>,
+}
+
+/// 手动触发热重载
+///
+/// 当配置文件被外部修改时，可以手动调用此命令来同步缓存
+#[tauri::command]
+pub async fn ai_hot_reload(
+    ai_manager: State<'_, AIManagerState>,
+    app: AppHandle,
+) -> Result<HotReloadResult, String> {
+    // 加载当前配置
+    let current_config = crate::config::Storage::load_ai_config(Some(&app))
+        .map_err(|e| e.to_string())?;
+
+    if current_config.is_some() {
+        // 清除所有缓存（因为我们没有旧配置的信息，所以清除所有）
+        let old_cache_size = ai_manager.manager().cache_size();
+        ai_manager.manager().clear_cache();
+
+        tracing::info!(
+            "[AI Hot Reload] Manual reload: Cleared {} providers from cache",
+            old_cache_size
+        );
+
+        Ok(HotReloadResult {
+            success: true,
+            removed_count: old_cache_size,
+            message: format!("缓存已清除，下次调用将使用新配置创建 Provider"),
+        })
+    } else {
+        Ok(HotReloadResult {
+            success: true,
+            removed_count: 0,
+            message: "未找到 AI 配置，无需重载".to_string(),
+        })
+    }
+}
+
+/// 热重载结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HotReloadResult {
+    /// 是否成功
+    pub success: bool,
+    /// 移除的 Provider 数量
+    pub removed_count: usize,
+    /// 结果消息
+    pub message: String,
 }

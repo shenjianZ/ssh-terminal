@@ -28,6 +28,7 @@ import { playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
 import { useState, useEffect } from 'react';
 import type { AIProviderConfig, AIProviderType } from '@/types/ai';
+import { AICachePanel } from '@/components/AICachePanel';
 
 export function AISettings() {
   const {
@@ -589,6 +590,9 @@ export function AISettings() {
           </Card>
         ))}
       </div>
+
+      {/* AI Provider 缓存管理 */}
+      <AICachePanel />
 
       {/* 使用提示 */}
       <Card>

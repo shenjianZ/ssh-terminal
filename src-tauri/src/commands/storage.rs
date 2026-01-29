@@ -4,6 +4,7 @@ use crate::ssh::session::SessionConfig;
 use tauri::{State, AppHandle};
 
 use super::session::SSHManagerState;
+use super::ai::AIManagerState;
 
 /// 保存所有会话配置到存储
 #[tauri::command]
@@ -65,10 +66,64 @@ pub async fn storage_config_get_default() -> crate::config::storage::TerminalCon
     Storage::get_default_config()
 }
 
-/// 保存 AI 配置
+/// 保存 AI 配置（带热重载）
 #[tauri::command]
-pub async fn storage_ai_config_save(config: crate::config::storage::AIConfig, app: AppHandle) -> std::result::Result<(), String> {
-    crate::config::Storage::save_ai_config(&config, Some(&app)).map_err(|e| e.to_string())
+pub async fn storage_ai_config_save(
+    config: crate::config::storage::AIConfig,
+    app: AppHandle,
+    ai_manager: State<'_, AIManagerState>,
+) -> std::result::Result<(), String> {
+    // 1. 加载旧配置（如果存在）
+    let old_config = crate::config::Storage::load_ai_config(Some(&app))
+        .unwrap_or(None);
+
+    // 2. 保存新配置
+    crate::config::Storage::save_ai_config(&config, Some(&app))
+        .map_err(|e| e.to_string())?;
+
+    // 3. 如果存在旧配置，执行智能热重载
+    if let Some(old_cfg) = old_config {
+        // 将 storage 配置转换为 Provider 配置
+        let old_provider_configs: Vec<crate::commands::ai::AIProviderConfig> = old_cfg.providers
+            .into_iter()
+            .map(|p| crate::commands::ai::AIProviderConfig {
+                provider_type: p.provider_type,
+                api_key: p.api_key,
+                base_url: p.base_url,
+                model: p.model,
+                temperature: Some(p.temperature),
+                max_tokens: Some(p.max_tokens),
+            })
+            .collect();
+
+        let new_provider_configs: Vec<crate::commands::ai::AIProviderConfig> = config.providers
+            .iter()
+            .map(|p| crate::commands::ai::AIProviderConfig {
+                provider_type: p.provider_type.clone(),
+                api_key: p.api_key.clone(),
+                base_url: p.base_url.clone(),
+                model: p.model.clone(),
+                temperature: Some(p.temperature),
+                max_tokens: Some(p.max_tokens),
+            })
+            .collect();
+
+        // 执行智能热重载
+        match ai_manager.manager().hot_reload(&old_provider_configs, &new_provider_configs) {
+            Ok(removed_count) => {
+                tracing::info!(
+                    "[AI Config] Hot reload completed: {} providers removed from cache",
+                    removed_count
+                );
+            }
+            Err(e) => {
+                tracing::warn!("[AI Config] Hot reload failed: {}", e);
+                // 热重载失败不影响配置保存
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// 加载 AI 配置

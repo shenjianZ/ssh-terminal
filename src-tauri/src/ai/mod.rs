@@ -3,7 +3,9 @@
 pub mod provider;
 pub mod openai;
 pub mod ollama;
+pub mod manager;
 
-pub use provider::{AIProvider, ChatMessage};
+pub use provider::ChatMessage;
 pub use openai::OpenAIProvider;
 pub use ollama::OllamaProvider;
+pub use manager::AIProviderManager;

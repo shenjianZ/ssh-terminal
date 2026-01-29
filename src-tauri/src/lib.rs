@@ -49,6 +49,10 @@ pub fn run() {
             };
             app.manage(audio_capturer);
 
+            // 初始化 AI Manager 状态
+            let ai_manager = commands::ai::AIManagerState::new();
+            app.manage(ai_manager);
+
             // 开发模式下自动打开开发者工具
             #[cfg(debug_assertions)]
             if let Some(window) = app.get_webview_window("main") {
@@ -117,6 +121,9 @@ pub fn run() {
             commands::ai_generate_command,
             commands::ai_analyze_error,
             commands::ai_test_connection,
+            commands::ai_clear_cache,
+            commands::ai_get_cache_info,
+            commands::ai_hot_reload,
             // AI 配置存储命令
             commands::storage_ai_config_save,
             commands::storage_ai_config_load,
