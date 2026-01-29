@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Trash2, MessageSquare, AlertCircle, Settings, Terminal, ArrowDown, ExternalLink, Send } from 'lucide-react';
 import { useAIStore } from '@/store/aiStore';
@@ -18,11 +18,13 @@ export function AIChatPanel() {
     getConversationHistory,
     clearConversation,
     isLoading,
-    streamingServerId,
+    streamingConnectionId,
     config,
   } = useAIStore();
 
   const [input, setInput] = useState('');
+  const [textareaHeight, setTextareaHeight] = useState('auto');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -33,14 +35,53 @@ export function AIChatPanel() {
   // 获取当前活跃的连接
   const activeTab = useTerminalStore((state) => state.getActiveTab());
   const currentConnectionId = activeTab?.connectionId || null;
-  // 暂时使用 connectionId 作为 serverId（后续需要从 Session 获取 serverId）
+  // 使用 connectionId 作为 serverId，每个连接有独立的 AI 对话历史
   const currentServerId = currentConnectionId;
 
   // 获取对话历史
   const messages = currentServerId ? getConversationHistory(currentServerId) : [];
 
   // 检查是否正在流式生成当前连接的消息
-  const isStreaming = streamingServerId === currentServerId;
+  const isStreaming = streamingConnectionId === currentServerId;
+
+  // 计算行高的辅助函数
+  const calculateHeight = useCallback(() => {
+    if (!textareaRef.current) return 'auto';
+
+    const textarea = textareaRef.current;
+    const scrollHeight = textarea.scrollHeight;
+
+    // 基础样式
+    const lineHeight = 20; // 对应 text-sm 的行高
+    const basePadding = 8; // 对应 p-2 的上下 padding
+    const singleLineHeight = lineHeight + basePadding;
+
+    // 最大行数：7行
+    const maxLines = 7;
+    const maxHeight = singleLineHeight * maxLines;
+
+    // 如果内容高度小于等于最大高度，使用内容高度；否则使用最大高度并启用滚动
+    const newHeight = Math.min(scrollHeight, maxHeight);
+
+    return `${Math.max(newHeight, singleLineHeight)}px`;
+  }, []);
+
+  // 处理输入变化，自动调整高度
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    setInput(newValue);
+
+    // 计算并设置新高度
+    const newHeight = calculateHeight();
+    setTextareaHeight(newHeight);
+  };
+
+  // 重置高度当清空输入时
+  useEffect(() => {
+    if (!input) {
+      setTextareaHeight('auto');
+    }
+  }, [input]);
 
   // 检查用户是否在底部附近（100px 以内）
   const isNearBottom = useCallback(() => {
@@ -96,6 +137,7 @@ export function AIChatPanel() {
     try {
       await sendMessage(currentServerId, input.trim());
       setInput('');
+      setTextareaHeight('auto');
       playSound(SoundEffect.SUCCESS);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : '发送失败';
@@ -175,13 +217,16 @@ export function AIChatPanel() {
   return (
     <Sheet open={isChatOpen} onOpenChange={toggleChat}>
       <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col">
+        <SheetTitle className="sr-only">AI 助手</SheetTitle>
+        <SheetDescription className="sr-only">与 AI 助手进行对话，询问命令解释、错误分析等问题</SheetDescription>
+
         {/* 渐变装饰条 */}
         <div className="h-1 bg-gradient-to-r from-blue-500/40 via-purple-500/60 to-pink-500/40" />
 
         {/* 头部 */}
         <div className="h-14 border-b flex items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <SheetTitle className="text-base font-semibold">AI 助手</SheetTitle>
+            <span className="text-base font-semibold">AI 助手</span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -256,30 +301,51 @@ export function AIChatPanel() {
           {/* 输入框 */}
           {currentServerId && hasEnabledProvider && (
             <div className="border-t p-4 bg-background/50">
-              <div className="flex gap-2 items-end">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (input.trim() && !isLoading && !isStreaming) {
-                        handleSend();
+              {/* 输入区域容器：带圆角边框 */}
+              <div className="relative border border-input rounded-lg bg-background transition-all duration-200 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                style={{
+                  minHeight: '44px',
+                  maxHeight: '300px',
+                }}
+              >
+                <div className="flex items-end gap-2 p-2 pb-6">
+                  {/* 输入框 */}
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (input.trim() && !isLoading && !isStreaming) {
+                          handleSend();
+                        }
                       }
-                    }
-                  }}
-                  placeholder="输入你的问题... (Enter 发送, Shift+Enter 换行)"
-                  disabled={isLoading || isStreaming}
-                  className="flex-1 min-h-[60px] max-h-[200px] resize-y custom-scrollbar rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                />
-                <Button
-                  size="icon"
-                  onClick={handleSend}
-                  disabled={!input.trim() || isLoading || isStreaming}
-                  className="h-[60px] w-[60px] flex-shrink-0"
-                >
-                  <Send className="h-5 w-5" />
-                </Button>
+                    }}
+                    placeholder="输入你的问题... (Enter 发送, Shift+Enter 换行)"
+                    style={{
+                      height: textareaHeight,
+                      maxHeight: '224px', // 7行 × 32px/行 = 224px
+                    }}
+                    className="flex-1 min-h-[28px] resize-none bg-transparent border-0 p-0 text-sm focus-visible:outline-none focus-visible:ring-0 placeholder:text-muted-foreground overflow-y-auto custom-scrollbar"
+                  />
+
+                  {/* 发送按钮 */}
+                  <Button
+                    size="icon"
+                    onClick={handleSend}
+                    disabled={!input.trim() || isLoading || isStreaming}
+                    className="h-8 w-8 flex-shrink-0 rounded-full"
+                    variant="default"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* 字符计数 */}
+                <div className="absolute bottom-1.5 left-3 text-xs text-muted-foreground pointer-events-none">
+                  {input.length} 字符
+                </div>
               </div>
             </div>
           )}

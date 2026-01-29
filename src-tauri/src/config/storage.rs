@@ -152,6 +152,7 @@ fn default_app_theme() -> String {
 /// 保存的会话（密码已加密）
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SavedSession {
+    pub id: String, // 服务器配置的唯一标识符
     pub name: String,
     pub host: String,
     pub port: u16,
@@ -336,8 +337,8 @@ impl Storage {
         }
     }
 
-    /// 加载所有保存的会话
-    pub fn load_sessions(&self) -> Result<Vec<SessionConfig>> {
+    /// 加载所有保存的会话，返回 (id, config) 元组列表
+    pub fn load_sessions(&self) -> Result<Vec<(String, SessionConfig)>> {
         if !self.storage_path.exists() {
             // 如果文件不存在，返回空列表
             return Ok(Vec::new());
@@ -349,8 +350,8 @@ impl Storage {
         let storage: SessionStorage = serde_json::from_str(&content)
             .map_err(|e| SSHError::Storage(format!("Failed to parse storage file: {}", e)))?;
 
-        // 解密并转换为 SessionConfig
-        let sessions: Result<Vec<SessionConfig>> = storage.sessions
+        // 解密并转换为 (id, SessionConfig) 元组
+        let sessions: Result<Vec<(String, SessionConfig)>> = storage.sessions
             .into_iter()
             .map(|s| self.decrypt_session(s))
             .collect();
@@ -359,10 +360,10 @@ impl Storage {
     }
 
     /// 保存会话列表
-    pub fn save_sessions(&self, sessions: &[SessionConfig]) -> Result<()> {
+    pub fn save_sessions(&self, sessions: &[(String, SessionConfig)]) -> Result<()> {
         let saved_sessions: Result<Vec<SavedSession>> = sessions
             .iter()
-            .map(|s| self.encrypt_session(s.clone()))
+            .map(|(id, config)| self.encrypt_session(id.clone(), config.clone()))
             .collect();
 
         let saved_sessions = saved_sessions?;
@@ -382,7 +383,7 @@ impl Storage {
     }
 
     /// 加密会话（使用 AES-256-GCM）
-    fn encrypt_session(&self, session: SessionConfig) -> Result<SavedSession> {
+    fn encrypt_session(&self, id: String, session: SessionConfig) -> Result<SavedSession> {
         // 将 AuthMethod 序列化为 JSON
         let auth_json = serde_json::to_string(&session.auth_method)
             .map_err(|e| SSHError::Crypto(format!("Failed to serialize auth method: {}", e)))?;
@@ -406,6 +407,7 @@ impl Storage {
         let nonce_encoded = base64::engine::general_purpose::STANDARD.encode(&nonce_bytes);
 
         Ok(SavedSession {
+            id,
             name: session.name,
             host: session.host,
             port: session.port,
@@ -442,7 +444,8 @@ impl Storage {
     }
 
     /// 解密会话（支持旧格式 base64 和新格式 AES-256-GCM）
-    fn decrypt_session(&self, saved: SavedSession) -> Result<SessionConfig> {
+    /// 返回 (id, SessionConfig) 元组
+    fn decrypt_session(&self, saved: SavedSession) -> Result<(String, SessionConfig)> {
         // 尝试解密
         let plaintext = if let Some(nonce_str) = &saved.nonce {
             // 有 nonce 字段，尝试 AES-256-GCM 解密
@@ -489,7 +492,7 @@ impl Storage {
                 SSHError::Crypto(format!("Failed to deserialize auth method: {}", e))
             })?;
 
-        Ok(SessionConfig {
+        let config = SessionConfig {
             name: saved.name,
             host: saved.host,
             port: saved.port,
@@ -501,7 +504,9 @@ impl Storage {
             strict_host_key_checking: true, // 默认启用严格的主机密钥验证
             group: saved.group,
             keep_alive_interval: 30, // 默认30秒
-        })
+        };
+
+        Ok((saved.id, config))
     }
 
     /// 删除存储文件
@@ -523,10 +528,10 @@ impl Storage {
         let sessions = self.load_sessions()?;
         let original_count = sessions.len();
 
-        // 过滤掉要删除的会话
+        // 过滤掉要删除的会话（访问元组的第二个元素 .1.name）
         let updated_sessions: Vec<_> = sessions
             .into_iter()
-            .filter(|s| s.name != session_name)
+            .filter(|s| s.1.name != session_name)
             .collect();
 
         // 如果会话数量没变，说明没找到

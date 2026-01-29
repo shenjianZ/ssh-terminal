@@ -14,8 +14,8 @@ pub async fn storage_sessions_save(
 ) -> Result<()> {
     let manager = manager.as_ref();
 
-    // 获取所有会话配置（所有 session 都是持久化的）
-    let session_configs = manager.get_all_session_configs().await;
+    // 获取所有会话配置及其ID
+    let session_configs = manager.get_all_session_configs_with_ids().await;
 
     println!("Saving {} session configs", session_configs.len());
 
@@ -25,9 +25,9 @@ pub async fn storage_sessions_save(
     Ok(())
 }
 
-/// 从存储加载所有保存的会话
+/// 从存储加载所有保存的会话，返回 (id, config) 元组列表
 #[tauri::command]
-pub async fn storage_sessions_load(app: AppHandle) -> std::result::Result<Vec<SessionConfig>, String> {
+pub async fn storage_sessions_load(app: AppHandle) -> std::result::Result<Vec<(String, SessionConfig)>, String> {
     let storage = Storage::new(Some(&app)).map_err(|e| e.to_string())?;
     let sessions = storage.load_sessions().map_err(|e| e.to_string())?;
     Ok(sessions)

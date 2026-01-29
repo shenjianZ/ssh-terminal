@@ -8,6 +8,7 @@ import { aiCache } from '@/lib/ai/cache';
 import { DEFAULT_SYSTEM_PROMPT } from '@/lib/ai/promptTemplates';
 import { playSound, SoundEffect } from '@/lib/sounds';
 import { AIHistoryManager } from '@/lib/ai/historyManager';
+import { useSessionStore } from './sessionStore';
 
 interface AIStore {
   // 配置
@@ -15,20 +16,20 @@ interface AIStore {
   isLoading: boolean;
   error: string | null;
 
-  // 对话历史（内存 - 按服务器身份）
-  conversations: Map<string, ChatMessage[]>;  // serverId -> messages
-  currentServerId: string | null;             // 当前选中的服务器 ID
+  // 对话历史（内存 - 按连接ID）
+  conversations: Map<string, ChatMessage[]>;  // connectionId -> messages（每个终端连接有独立的对话历史）
+  currentServerId: string | null;             // 当前选中的连接 ID（实际是 connectionId）
   currentConnectionId: string | null;         // 当前活跃的连接 ID（用于实时终端交互）
 
   // 历史记录管理（持久化）
   serverGroups: ServerConversationGroup[];    // 按服务器分组的历史
-  selectedConversationId: string | null;      // 当前选中的对话 ID
+  selectedConversationId: string | null;      // 当前选中的对话 ID（从历史记录中选择）
 
   // 连接状态追踪
   activeConnections: Set<string>;            // 当前活跃的 connectionId
 
   // 流式状态
-  streamingServerId: string | null;          // 当前正在流式生成的服务器ID
+  streamingConnectionId: string | null;      // 当前正在流式生成的连接ID
 
   // UI 状态
   isChatOpen: boolean;
@@ -41,7 +42,7 @@ interface AIStore {
 
   // ========== AI 操作 ==========
 
-  sendMessage: (serverId: string, message: string) => Promise<string>;
+  sendMessage: (connectionId: string, message: string) => Promise<string>;
   explainCommand: (command: string) => Promise<string>;
   naturalLanguageToCommand: (input: string) => Promise<string>;
   analyzeError: (error: string) => Promise<string>;
@@ -49,8 +50,8 @@ interface AIStore {
 
   // ========== 对话历史管理 ==========
 
-  getConversationHistory: (serverId: string) => ChatMessage[];
-  clearConversation: (serverId: string) => void;
+  getConversationHistory: (connectionId: string) => ChatMessage[];
+  clearConversation: (connectionId: string) => void;
 
   // 新增：按服务器分组的历史管理
 
@@ -59,6 +60,7 @@ interface AIStore {
   selectConversation: (conversationId: string) => Promise<void>;
   createConversation: (serverId: string) => void;
   isServerOnline: (serverId: string) => boolean;
+  getServerActiveConnectionCount: (serverId: string) => number;
   updateActiveConnections: (connectionIds: string[]) => void;
 
   // ========== UI 控制 ==========
@@ -79,7 +81,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
   serverGroups: [],
   selectedConversationId: null,
   activeConnections: new Set(),
-  streamingServerId: null,
+  streamingConnectionId: null,
   isChatOpen: false,
 
   // ========== 配置管理 ==========
@@ -119,8 +121,8 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
   // ========== AI 操作 ==========
 
-  sendMessage: async (serverId: string, message: string) => {
-    const { config, conversations } = get();
+  sendMessage: async (connectionId: string, message: string) => {
+    const { config, conversations, currentServerId } = get();
 
     if (!config) {
       throw new Error('AI 配置未初始化');
@@ -131,19 +133,24 @@ export const useAIStore = create<AIStore>((set, get) => ({
       throw new Error('没有可用的 AI Provider');
     }
 
+    // 如果切换了连接，更新currentServerId和currentConnectionId
+    if (currentServerId !== connectionId) {
+      set({ currentServerId: connectionId, currentConnectionId: connectionId });
+    }
+
     // 添加用户消息到历史
     const userMessage: ChatMessage = { role: 'user', content: message };
-    const history = conversations.get(serverId) || [];
+    const history = conversations.get(connectionId) || [];
     const newHistory = [...history, userMessage];
 
     // 添加一个空的 assistant 消息（用于流式更新）
     const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
     const updatedHistory = [...newHistory, assistantMessage];
 
-    // 更新对话历史
+    // 更新对话历史（使用 connectionId 作为 key）
     const newConversations = new Map(conversations);
-    newConversations.set(serverId, updatedHistory);
-    set({ conversations: newConversations, streamingServerId: serverId, isLoading: true, error: null });
+    newConversations.set(connectionId, updatedHistory);
+    set({ conversations: newConversations, streamingConnectionId: connectionId, isLoading: true, error: null });
 
     try {
       // 添加系统提示词
@@ -154,12 +161,12 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
       await AIClient.chatStream(provider, contextMessages, (chunk) => {
         const { conversations } = get();
-        const currentConv = conversations.get(serverId);
+        const currentConv = conversations.get(connectionId);
         if (currentConv && currentConv.length > 0) {
           const lastMessage = currentConv[currentConv.length - 1];
           if (lastMessage.role === 'assistant') {
             const updatedConv = new Map(conversations);
-            updatedConv.set(serverId, [
+            updatedConv.set(connectionId, [
               ...currentConv.slice(0, -1),
               { ...lastMessage, content: lastMessage.content + chunk }
             ]);
@@ -168,14 +175,15 @@ export const useAIStore = create<AIStore>((set, get) => ({
         }
       });
 
-      set({ streamingServerId: null, isLoading: false });
+      set({ streamingConnectionId: null, isLoading: false });
       playSound(SoundEffect.AI_STREAM_COMPLETE);
 
       // 自动保存对话到历史记录
+      // 直接使用 connectionId 作为 conversationId（一个连接对应一个对话）
       const { conversations: finalConversations } = get();
-      const finalHistory = finalConversations.get(serverId);
+      const finalHistory = finalConversations.get(connectionId);
       if (finalHistory && finalHistory.length > 0) {
-        const conversation = buildConversation(serverId, finalHistory);
+        const conversation = buildConversation(connectionId, finalHistory);
         await AIHistoryManager.saveConversation(conversation).catch(err => {
           console.error('[AIStore] Failed to save conversation:', err);
         });
@@ -188,14 +196,14 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
       // 移除失败的 assistant 消息
       const { conversations } = get();
-      const currentConv = conversations.get(serverId);
+      const currentConv = conversations.get(connectionId);
       if (currentConv && currentConv.length > 0 && currentConv[currentConv.length - 1].role === 'assistant') {
         const updatedConv = new Map(conversations);
-        updatedConv.set(serverId, currentConv.slice(0, -1));
+        updatedConv.set(connectionId, currentConv.slice(0, -1));
         set({ conversations: updatedConv });
       }
 
-      set({ error: errorMsg, streamingServerId: null, isLoading: false });
+      set({ error: errorMsg, streamingConnectionId: null, isLoading: false });
       throw error;
     }
   },
@@ -320,15 +328,15 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
   // ========== 对话历史管理 ==========
 
-  getConversationHistory: (serverId: string) => {
+  getConversationHistory: (connectionId: string) => {
     const { conversations } = get();
-    return conversations.get(serverId) || [];
+    return conversations.get(connectionId) || [];
   },
 
-  clearConversation: (serverId: string) => {
+  clearConversation: (connectionId: string) => {
     const { conversations } = get();
     const newConversations = new Map(conversations);
-    newConversations.delete(serverId);
+    newConversations.delete(connectionId);
     set({ conversations: newConversations });
   },
 
@@ -344,38 +352,125 @@ export const useAIStore = create<AIStore>((set, get) => ({
   },
 
   selectServer: async (serverId: string) => {
-    set({ currentServerId: serverId, selectedConversationId: null });
+    set({
+      currentConnectionId: serverId,
+      currentServerId: serverId,
+      selectedConversationId: null,
+      // 注意：不重置 currentConversationIds，保留其他连接的对话ID
+    });
 
-    // 加载该服务器的对话历史
-    const conversations = await AIHistoryManager.listConversationsByServer(serverId);
+    // 加载该连接的对话历史
+    // serverId 是 connectionId（连接实例ID）
+    const conversations = await AIHistoryManager.listConversationsByConnection(serverId);
     if (conversations.length > 0) {
-      // TODO: 加载完整对话内容
-      console.log('[AIStore] Found conversations for server:', conversations.length);
+      // 找到最近的对话并加载
+      const latestConversation = conversations.sort((a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      )[0];
+
+      // 加载该对话的完整内容
+      await get().selectConversation(latestConversation.id);
+      console.log('[AIStore] Loaded latest conversation for connection:', serverId);
+    } else {
+      // 没有对话历史，清空内存
+      const { conversations } = get();
+      const newConversations = new Map(conversations);
+      newConversations.set(serverId, []);
+      set({ conversations: newConversations });
+      console.log('[AIStore] No conversation history for connection:', serverId);
     }
   },
 
   selectConversation: async (conversationId: string) => {
     set({ selectedConversationId: conversationId });
-    // TODO: 加载完整对话内容
+
+    try {
+      // 从历史记录中加载对话内容
+      const conversation = await AIHistoryManager.getConversation(conversationId);
+
+      // 将 AIChatMessage 转换为 ChatMessage（移除 timestamp 字段）
+      const messages: ChatMessage[] = conversation.messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // 提取消息并更新 conversations Map
+      // 使用 connectionId 作为键，确保每个连接有独立的对话历史
+      const connectionId = conversation.meta.connectionId;
+      const newConversations = new Map(get().conversations);
+      newConversations.set(connectionId, messages);
+      set({
+        conversations: newConversations,
+        currentConnectionId: connectionId,
+        currentServerId: connectionId,
+        selectedConversationId: conversationId
+      });
+    } catch (error) {
+      console.error('[AIStore] Failed to load conversation:', error);
+    }
   },
 
-  createConversation: (serverId: string) => {
-    // 为指定服务器创建新对话
+  createConversation: (connectionId: string) => {
+    // 为指定连接创建新对话
+    // 直接清空内存中的对话历史即可，不需要生成新的ID
     const { conversations } = get();
     const newConversations = new Map(conversations);
-    newConversations.set(serverId, []);
+    newConversations.set(connectionId, []); // 清空内存中的对话历史
     set({
       conversations: newConversations,
-      currentServerId: serverId,
+      currentConnectionId: connectionId,
+      currentServerId: connectionId,
       selectedConversationId: null
     });
+    console.log('[AIStore] Created new conversation for connection:', connectionId);
   },
 
-  isServerOnline: (_serverId: string) => {
+  isServerOnline: (serverId: string) => {
     const { activeConnections } = get();
-    // 简化实现：只要有任何活跃连接就认为服务器在线
-    // TODO: 未来可以根据 serverId -> connectionId 映射更精确地判断
-    return activeConnections.size > 0;
+    const sessionStore = useSessionStore.getState();
+    const { sessions } = sessionStore;
+
+    // 找到属于该服务器的所有session（包括配置和连接实例）
+    // serverId 可能是：
+    // 1. session配置ID (s.id === serverId)
+    // 2. 临时连接ID (s.connectionSessionId === serverId)
+    // 3. connectionId (s.connectionId === serverId)
+    const serverSessions = sessions.filter(s =>
+      s.id === serverId ||
+      s.connectionSessionId === serverId ||
+      s.connectionId === serverId
+    );
+
+    // 如果没有找到任何匹配的session，检查 activeConnections
+    if (serverSessions.length === 0 && activeConnections.has(serverId)) {
+      return true;
+    }
+
+    // 检查是否有任何连接处于活跃状态
+    const hasActiveConnection = serverSessions.some(s => s.status === 'connected');
+
+    // 同时也检查 activeConnections 中是否有匹配的连接
+    const hasActiveConnectionId = serverSessions.some(s =>
+      s.connectionId && activeConnections.has(s.connectionId)
+    );
+
+    return hasActiveConnection || hasActiveConnectionId;
+  },
+
+  getServerActiveConnectionCount: (serverId: string) => {
+    const sessionStore = useSessionStore.getState();
+    const { sessions } = sessionStore;
+
+    // 找到属于该服务器的所有session
+    // serverId 可能是 sessionId、connectionSessionId 或 connectionId
+    const serverSessions = sessions.filter(s =>
+      s.id === serverId ||
+      s.connectionSessionId === serverId ||
+      s.connectionId === serverId
+    );
+
+    // 统计活跃连接数
+    return serverSessions.filter(s => s.status === 'connected').length;
   },
 
   updateActiveConnections: (connectionIds: string[]) => {
@@ -403,18 +498,48 @@ export const useAIStore = create<AIStore>((set, get) => ({
 /**
  * 构建会话对象（用于持久化存储）
  *
- * 注意：这个函数需要 ServerIdentity 信息，暂时使用默认值
- * 实际使用时应该从 terminalStore 或 sessionStore 获取完整的 Session 信息
+ * 从 sessionStore 获取完整的 Session 信息
+ *
+ * @param connectionId - 连接 ID（每个终端连接的唯一标识，也作为对话ID）
+ * @param messages - 消息列表
  */
-function buildConversation(serverId: string, messages: ChatMessage[]): AIConversation {
+function buildConversation(connectionId: string, messages: ChatMessage[]): AIConversation {
   const firstUserMessage = messages.find(m => m.role === 'user');
   const now = new Date().toISOString();
 
-  // TODO: 从 sessionStore 获取完整的 ServerIdentity
-  // 暂时使用默认值
-  const serverIdentity: ServerIdentity = {
-    sessionId: serverId,
-    sessionName: '服务器',
+  // 从 sessionStore 获取完整的 Session 信息
+  // 注意：connectionId 是唯一标识，每个终端连接都有独立的 connectionId
+  const sessionStore = useSessionStore.getState();
+  const session = sessionStore.sessions.find(s => s.connectionId === connectionId || s.id === connectionId);
+
+  // 判断是否是持久化配置的连接
+  // 逻辑：如果有 connectionSessionId，且该 ID 在 sessions 列表中存在对应的持久化配置，则是持久化连接
+  // 否则是快速连接（临时连接）
+  const isPersistentSession = session?.connectionSessionId &&
+    sessionStore.sessions.some(s => s.id === session.connectionSessionId && !s.connectionId);
+
+  // 生成服务器配置ID（用于分组同一服务器的所有对话）
+  // 确保持久化配置和临时连接到同一服务器时，使用相同的sessionId
+  const generateServerConfigId = (s: any): string => {
+    // 如果是持久化配置的连接，使用其配置ID
+    if (isPersistentSession && s.connectionSessionId) {
+      return s.connectionSessionId;
+    }
+    // 对于临时连接（快速连接），使用固定的 sessionId
+    // 这样所有快速连接的对话都会聚合在一起
+    return 'quick-connect';
+  };
+
+  // 构建正确的 ServerIdentity
+  const serverIdentity: ServerIdentity = session ? {
+    sessionId: generateServerConfigId(session),
+    sessionName: isPersistentSession ? session.name : '快速连接对话',
+    host: session.host,
+    port: session.port,
+    username: session.username,
+  } : {
+    sessionId: 'quick-connect',
+    sessionName: '快速连接对话',
     host: 'unknown',
     port: 22,
     username: 'unknown',
@@ -422,10 +547,10 @@ function buildConversation(serverId: string, messages: ChatMessage[]): AIConvers
 
   return {
     meta: {
-      id: `${serverId}-${Date.now()}`, // 生成唯一 ID
+      id: connectionId, // 直接使用 connectionId 作为对话ID
       title: generateTitle(firstUserMessage?.content || '新对话'),
+      connectionId: connectionId, // 使用 connectionId（连接实例ID）
       serverIdentity: serverIdentity,
-      connectionInstanceId: serverId, // 可选
       createdAt: now,
       updatedAt: now,
       messageCount: messages.length,

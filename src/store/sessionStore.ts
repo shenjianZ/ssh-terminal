@@ -259,8 +259,8 @@ export const useSessionStore = create<SessionStore>()(
           const existingSessions = await invoke<SessionInfo[]>('session_list');
           console.log('[sessionStore] Existing sessions from backend:', existingSessions.length);
 
-          // 2. 从存储加载配置
-          const sessionConfigs = await invoke<SessionConfig[]>('storage_sessions_load');
+          // 2. 从存储加载配置及其ID
+          const sessionConfigs = await invoke<[string, SessionConfig][]>('storage_sessions_load');
           console.log('[sessionStore] Loaded session configs from storage:', sessionConfigs.length);
 
           if (sessionConfigs.length === 0) {
@@ -271,32 +271,28 @@ export const useSessionStore = create<SessionStore>()(
             return;
           }
 
-          // 3. 为每个配置创建session（只创建不存在的）
+          // 3. 为每个配置创建session（使用保存的ID）
           let createdCount = 0;
           let skippedCount = 0;
-          for (const config of sessionConfigs) {
-            // 检查是否已存在（通过 name, host, port, username 匹配）
-            const alreadyExists = existingSessions.some(s =>
-              s.name === config.name &&
-              s.host === config.host &&
-              s.port === config.port &&
-              s.username === config.username &&
-              !s.connectionSessionId // 只匹配会话配置，不包括连接实例
-            );
+          for (const [id, config] of sessionConfigs) {
+            // 检查是否已存在（通过ID匹配）
+            const alreadyExists = existingSessions.some(s => s.id === id);
 
             if (!alreadyExists) {
               try {
-                await invoke('session_create', {
+                // 使用保存的ID创建session
+                await invoke('session_create_with_id', {
+                  id: id,
                   config: config,
                 });
                 createdCount++;
-                console.log(`[sessionStore] Created new session: ${config.name}`);
+                console.log(`[sessionStore] Created new session with saved ID: ${id} (${config.name})`);
               } catch (error) {
                 console.log(`[sessionStore] Failed to create session ${config.name}:`, error);
               }
             } else {
               skippedCount++;
-              console.log(`[sessionStore] Session already exists, skipping creation: ${config.name}`);
+              console.log(`[sessionStore] Session already exists, skipping creation: ${id} (${config.name})`);
             }
           }
 

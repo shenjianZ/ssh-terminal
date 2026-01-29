@@ -21,17 +21,36 @@ export class AIHistoryManager {
   }
 
   /**
-   * 按服务器分组获取对话历史（新版 - 推荐）
+   * 按服务器配置分组获取对话历史（新版 - 推荐）
+   *
+   * 返回按服务器配置分组的对话列表，UI采用两层结构
    */
   static async listServerGroups(): Promise<ServerConversationGroup[]> {
     return invoke<ServerConversationGroup[]>('ai_history_list_by_server');
   }
 
   /**
-   * 获取指定服务器的所有对话
+   * 获取指定连接实例的所有对话
+   *
+   * 参数：connectionId - 连接实例ID
+   * 每个终端连接都有独立的对话历史
    */
-  static async listConversationsByServer(serverId: string): Promise<AIConversationMeta[]> {
-    return invoke<AIConversationMeta[]>('ai_history_list_by_server_id', { serverId });
+  static async listConversationsByConnection(connectionId: string): Promise<AIConversationMeta[]> {
+    return invoke<AIConversationMeta[]>('ai_history_list_by_server_id', {
+      serverId: connectionId
+    });
+  }
+
+  /**
+   * 获取指定服务器配置的所有对话
+   *
+   * 参数：sessionId - 会话配置ID
+   * 返回：属于该配置的所有连接的对话
+   */
+  static async listConversationsBySession(sessionId: string): Promise<AIConversationMeta[]> {
+    return invoke<AIConversationMeta[]>('ai_history_list_by_session_id', {
+      sessionId
+    });
   }
 
   /**

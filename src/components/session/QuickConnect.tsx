@@ -41,7 +41,7 @@ export function QuickConnect({ open, onOpenChange, onConnect }: QuickConnectProp
         port: parseInt(port),
         username,
         authMethod: {
-          Password: {
+          password: {
             password,
           },
         },

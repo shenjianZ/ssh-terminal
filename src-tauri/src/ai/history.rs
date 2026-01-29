@@ -54,11 +54,10 @@ pub struct AIConversationMeta {
     pub id: String,
     /// 会话标题
     pub title: String,
+    /// 连接实例ID：每个终端连接的唯一标识
+    pub connection_id: String,
     /// 关联的服务器身份
     pub server_identity: ServerIdentity,
-    /// 具体连接实例ID（可选，用于追踪）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub connection_instance_id: Option<String>,
     /// 创建时间
     pub created_at: DateTime<Utc>,
     /// 更新时间
@@ -85,6 +84,8 @@ pub struct AIConversation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerConversationGroup {
+    /// 服务器配置ID
+    pub session_id: String,
     /// 服务器身份信息
     pub server_identity: ServerIdentity,
     /// 该服务器的所有对话
@@ -229,14 +230,17 @@ impl AIChatHistory {
     }
 
     /// 按服务器身份分组获取对话历史
+    ///
+    /// 返回按 session_id（服务器配置）分组的对话列表
+    /// UI采用两层结构：显示所有该服务器的对话，活跃的排在前面
     pub fn list_by_server(&self) -> Vec<ServerConversationGroup> {
         let mut server_map: HashMap<String, Vec<AIConversationMeta>> = HashMap::new();
 
-        // 按 session_id 分组
+        // 按 session_id 分组（用于UI展示）
         for conv in &self.conversations {
-            let server_id = conv.meta.server_identity.session_id.clone();
+            let session_id = conv.meta.server_identity.session_id.clone();
             server_map
-                .entry(server_id)
+                .entry(session_id)
                 .or_insert_with(Vec::new)
                 .push(conv.meta.clone());
         }
@@ -244,7 +248,7 @@ impl AIChatHistory {
         // 转换为分组结构
         let mut groups: Vec<ServerConversationGroup> = server_map
             .into_iter()
-            .map(|(_session_id, conversations)| {
+            .map(|(session_id, conversations)| {
                 let first = conversations.first().unwrap();
                 let active_count = conversations
                     .iter()
@@ -252,6 +256,7 @@ impl AIChatHistory {
                     .count();
 
                 ServerConversationGroup {
+                    session_id,
                     server_identity: first.server_identity.clone(),
                     total_conversations: conversations.len(),
                     active_connection_count: active_count,
@@ -277,11 +282,24 @@ impl AIChatHistory {
         groups
     }
 
-    /// 获取指定服务器的所有对话
-    pub fn list_by_server_id(&self, server_id: &str) -> Vec<AIConversationMeta> {
+    /// 获取指定连接实例的所有对话
+    ///
+    /// 按 connection_id（连接实例ID）过滤，每个终端连接都有独立的对话历史
+    pub fn list_by_connection_id(&self, connection_id: &str) -> Vec<AIConversationMeta> {
         self.conversations
             .iter()
-            .filter(|c| c.meta.server_identity.session_id == server_id)
+            .filter(|c| c.meta.connection_id == connection_id)
+            .map(|c| c.meta.clone())
+            .collect()
+    }
+
+    /// 获取指定服务器配置的所有对话（按 session_id）
+    ///
+    /// 返回属于同一个服务器配置的所有连接的对话
+    pub fn list_by_session_id(&self, session_id: &str) -> Vec<AIConversationMeta> {
+        self.conversations
+            .iter()
+            .filter(|c| c.meta.server_identity.session_id == session_id)
             .map(|c| c.meta.clone())
             .collect()
     }

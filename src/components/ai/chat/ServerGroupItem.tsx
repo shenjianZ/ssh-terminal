@@ -18,7 +18,10 @@ interface ServerGroupItemProps {
 export function ServerGroupItem({ group }: ServerGroupItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const navigate = useNavigate();
-  const { selectServer } = useAIStore();
+  const { selectServer, getServerActiveConnectionCount } = useAIStore();
+
+  // 获取实时的活跃连接数
+  const activeConnectionCount = getServerActiveConnectionCount(group.serverIdentity.sessionId);
 
   const handleSelectServer = () => {
     selectServer(group.serverIdentity.sessionId);
@@ -45,10 +48,10 @@ export function ServerGroupItem({ group }: ServerGroupItemProps) {
         <div className="flex-1 text-left">
           <div className="flex items-center gap-2">
             <span className="font-medium text-sm">{group.serverIdentity.sessionName}</span>
-            {group.activeConnectionCount > 0 && (
+            {activeConnectionCount > 0 && (
               <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                 <Activity className="w-3 h-3" />
-                <span>{group.activeConnectionCount} 在线</span>
+                <span>{activeConnectionCount} 在线</span>
               </div>
             )}
           </div>

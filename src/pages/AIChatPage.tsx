@@ -22,6 +22,7 @@ export function AIChatPage() {
   } = useAIStore();
 
   const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // 初始化：加载服务器分组
   useEffect(() => {
@@ -62,8 +63,12 @@ export function AIChatPage() {
   }
 
   return (
-    <div className="h-screen flex overflow-hidden bg-background">
-      <AIChatLayout onNewChat={handleNewChat} />
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      <AIChatLayout
+        onNewChat={handleNewChat}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
     </div>
   );
 }

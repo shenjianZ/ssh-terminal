@@ -89,19 +89,31 @@ pub async fn ai_history_export(id: String, format: String) -> Result<String, Str
 /// 按服务器身份分组获取对话历史
 ///
 /// 返回按 Session/Profile 分组的对话列表，每个分组包含该服务器的所有对话
+/// 注意：虽然按服务器配置分组，但每个连接实例的对话是独立的
 #[tauri::command]
 pub async fn ai_history_list_by_server() -> Result<Vec<ServerConversationGroup>, String> {
     let history = AIChatHistory::load()?;
     Ok(history.list_by_server())
 }
 
-/// 获取指定服务器的所有对话
+/// 获取指定连接实例的所有对话
 ///
-/// 根据 server_id (session_id) 获取该服务器的所有对话元数据
+/// 根据 connection_id（连接实例ID）获取该连接的所有对话元数据
+/// 注意：每个终端连接都有独立的对话历史
 #[tauri::command]
 pub async fn ai_history_list_by_server_id(server_id: String) -> Result<Vec<AIConversationMeta>, String> {
     let history = AIChatHistory::load()?;
-    Ok(history.list_by_server_id(&server_id))
+    Ok(history.list_by_connection_id(&server_id))
+}
+
+/// 获取指定服务器配置的所有对话（按 session_id）
+///
+/// 根据 session_id（服务器配置ID）获取该服务器的所有对话元数据
+/// 返回属于同一个服务器配置的所有连接的对话
+#[tauri::command]
+pub async fn ai_history_list_by_session_id(session_id: String) -> Result<Vec<AIConversationMeta>, String> {
+    let history = AIChatHistory::load()?;
+    Ok(history.list_by_session_id(&session_id))
 }
 
 /// 更新对话的连接状态

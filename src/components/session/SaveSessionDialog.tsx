@@ -96,8 +96,8 @@ export function SaveSessionDialog({
         port: parseInt(formData.port),
         username: formData.username,
         authMethod: formData.authMethod === 'password'
-          ? { Password: { password: formData.password || '' } }
-          : { PublicKey: { privateKeyPath: formData.privateKeyPath || '', passphrase: formData.passphrase } },
+          ? { password: { password: formData.password || '' } }
+          : { publicKey: { privateKeyPath: formData.privateKeyPath || '', passphrase: formData.passphrase } },
         password: formData.authMethod === 'password' ? formData.password : undefined,
         privateKeyPath: formData.authMethod === 'publicKey' ? formData.privateKeyPath : undefined,
         passphrase: formData.authMethod === 'publicKey' ? formData.passphrase : undefined,

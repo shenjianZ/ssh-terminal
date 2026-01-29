@@ -7,7 +7,6 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Plus } from 'lucide-react';
 import { useAIStore } from '@/store/aiStore';
 import { ServerList } from './ServerList';
@@ -21,10 +20,15 @@ export function AIChatSidebar({ onNewChat }: { onNewChat: () => void }) {
     group.serverIdentity.host.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // 阻止滚轮事件传播
+  const handleWheel = (e: React.WheelEvent) => {
+    e.stopPropagation();
+  };
+
   return (
-    <div className="flex flex-col h-full w-full">
-      {/* 工具栏 */}
-      <div className="p-4 border-b border-border space-y-3">
+    <div className="h-full flex flex-col w-full">
+      {/* 工具栏 - 固定在顶部，不滚动 */}
+      <div className="p-4 border-b border-border space-y-3 shrink-0">
         <Button onClick={onNewChat} className="w-full" size="sm">
           <Plus className="w-4 h-4 mr-2" />
           新建对话
@@ -41,10 +45,10 @@ export function AIChatSidebar({ onNewChat }: { onNewChat: () => void }) {
         </div>
       </div>
 
-      {/* 服务器列表 */}
-      <ScrollArea className="flex-1">
+      {/* 服务器列表 - 可滚动区域 */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ touchAction: 'pan-y' }} onWheel={handleWheel}>
         <ServerList groups={filteredGroups} />
-      </ScrollArea>
+      </div>
     </div>
   );
 }

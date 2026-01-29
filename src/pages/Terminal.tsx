@@ -182,7 +182,7 @@ export function Terminal() {
       host: config.host,
       port: config.port,
       username: config.username,
-      auth_method: config.password ? { Password: { password: config.password } } : { PublicKey: { private_key_path: config.privateKeyPath || '', passphrase: config.passphrase } },
+      authMethod: config.password ? { password: { password: config.password } } : { publicKey: { privateKeyPath: config.privateKeyPath || '', passphrase: config.passphrase } },
       password: config.password,
       privateKeyPath: config.privateKeyPath,
       passphrase: config.passphrase,

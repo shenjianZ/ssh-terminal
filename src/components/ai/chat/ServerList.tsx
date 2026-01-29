@@ -15,16 +15,18 @@ interface ServerListProps {
 export function ServerList({ groups }: ServerListProps) {
   if (groups.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground text-sm px-4">
-        <Server className="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p>暂无历史对话</p>
-        <p className="text-xs mt-1">点击上方按钮创建新对话</p>
+      <div className="flex items-center justify-center h-full min-h-[200px] text-center">
+        <div className="px-4">
+          <Server className="w-12 h-12 mx-auto mb-3 opacity-50" />
+          <p className="text-muted-foreground text-sm">暂无历史对话</p>
+          <p className="text-xs mt-1 text-muted-foreground">点击上方按钮创建新对话</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-2 space-y-2">
+    <div className="p-2 space-y-2 min-h-full">
       {groups.map((group) => (
         <ServerGroupItem
           key={group.serverIdentity.sessionId}

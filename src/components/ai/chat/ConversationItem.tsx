@@ -17,7 +17,10 @@ interface ConversationItemProps {
 
 export function ConversationItem({ conversation }: ConversationItemProps) {
   const navigate = useNavigate();
-  const { selectConversation } = useAIStore();
+  const { selectConversation, isServerOnline } = useAIStore();
+
+  // 使用实时状态检查服务器是否在线
+  const isOnline = isServerOnline(conversation.serverIdentity.sessionId);
 
   const handleClick = () => {
     selectConversation(conversation.id);
@@ -48,7 +51,7 @@ export function ConversationItem({ conversation }: ConversationItemProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <h4 className="text-sm font-medium truncate">{conversation.title}</h4>
-            {conversation.connectionStatus === 'active' && (
+            {isOnline && (
               <span className="flex-shrink-0 w-2 h-2 rounded-full bg-green-500" />
             )}
           </div>

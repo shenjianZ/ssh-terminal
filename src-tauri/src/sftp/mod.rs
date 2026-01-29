@@ -54,7 +54,7 @@ pub enum TransferOperation {
 #[serde(rename_all = "camelCase")]
 pub enum TransferSource {
     Local { path: String },
-    Remote { connectionId: String, path: String },
+    Remote { connection_id: String, path: String },
 }
 
 /// 传输状态

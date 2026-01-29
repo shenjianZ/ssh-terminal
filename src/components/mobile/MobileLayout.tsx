@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Menu, Terminal, Settings, Smartphone, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from '@/components/ui/sheet';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { isMobileDevice } from '@/lib/utils';
 
@@ -47,6 +47,7 @@ export function MobileLayout({ children }: { children: React.ReactNode }) {
             <SheetContent side="left" className="w-64 p-0">
               <SheetHeader className="p-4 border-b">
                 <SheetTitle>菜单</SheetTitle>
+                <SheetDescription>导航菜单，选择要访问的功能页面</SheetDescription>
               </SheetHeader>
               <nav className="flex flex-col p-2">
                 {navigationItems.map((item) => {

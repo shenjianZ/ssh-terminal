@@ -1,6 +1,13 @@
 // AI 相关类型定义
 
 /**
+ * 核心 ID 类型
+ */
+export type SessionId = string;      // 会话配置ID (SessionConfig.id)
+export type ConnectionId = string;   // 连接实例ID (ConnectionInstance.connectionId)
+export type ConversationId = string; // 对话ID (AIConversation.id)
+
+/**
  * AI 服务提供商类型
  */
 export type AIProviderType = 'openai' | 'ollama' | 'qwen' | 'wenxin';
@@ -89,10 +96,10 @@ export interface AIChatMessage {
  * AI 对话会话元数据
  */
 export interface AIConversationMeta {
-  id: string;
+  id: ConversationId;
   title: string;
+  connectionId: ConnectionId; // 连接实例ID：每个终端连接的唯一标识
   serverIdentity: ServerIdentity;
-  connectionInstanceId?: string;
   createdAt: string; // ISO 8601 格式
   updatedAt: string; // ISO 8601 格式
   messageCount: number;
@@ -110,12 +117,15 @@ export interface AIConversation {
 
 /**
  * 按服务器分组的对话列表
+ *
+ * UI采用两层结构：按服务器配置分组，显示所有该服务器的对话（活跃的排在前面）
  */
 export interface ServerConversationGroup {
+  sessionId: SessionId; // 服务器配置ID
   serverIdentity: ServerIdentity;
-  conversations: AIConversationMeta[];
+  conversations: AIConversationMeta[]; // 该服务器的所有对话
   totalConversations: number;
-  activeConnectionCount: number;
+  activeConnectionCount: number; // 活跃连接数
   latestConversationAt?: string;
 }
 

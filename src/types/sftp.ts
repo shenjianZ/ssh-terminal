@@ -45,7 +45,7 @@ export type TransferSource =
  */
 export type TransferStatus =
   | 'pending'
-  | 'in_progress'
+  | 'inProgress'
   | 'completed'
   | 'failed'
   | 'cancelled';

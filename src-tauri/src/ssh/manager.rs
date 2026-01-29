@@ -35,16 +35,22 @@ impl SSHManager {
     // ============= Session配置管理 =============
 
     /// 创建新的会话配置（持久化）
-    pub async fn create_session(&self, config: SessionConfig) -> Result<String> {
-        let id = uuid::Uuid::new_v4().to_string();
+    /// 如果提供了id，使用该id；否则生成新的UUID
+    pub async fn create_session_with_id(&self, id: Option<String>, config: SessionConfig) -> Result<String> {
+        let session_id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
         {
             let mut sessions = self.sessions.write().await;
-            sessions.insert(id.clone(), config);
+            sessions.insert(session_id.clone(), config);
         }
 
-        println!("Created persistent session config: {}", id);
-        Ok(id)
+        println!("Created persistent session config: {}", session_id);
+        Ok(session_id)
+    }
+
+    /// 创建新的会话配置（持久化），生成新的ID
+    pub async fn create_session(&self, config: SessionConfig) -> Result<String> {
+        self.create_session_with_id(None, config).await
     }
 
     /// 创建临时连接（不保存到 sessions，直接创建 connection 实例）
@@ -169,6 +175,15 @@ impl SSHManager {
     pub async fn get_all_session_configs(&self) -> Vec<SessionConfig> {
         let sessions = self.sessions.read().await;
         sessions.values().cloned().collect()
+    }
+
+    /// 获取所有会话配置及其ID（用于持久化存储）
+    pub async fn get_all_session_configs_with_ids(&self) -> Vec<(String, SessionConfig)> {
+        let sessions = self.sessions.read().await;
+        sessions
+            .iter()
+            .map(|(id, config)| (id.clone(), config.clone()))
+            .collect()
     }
 
     /// 列出所有连接（用于前端显示）

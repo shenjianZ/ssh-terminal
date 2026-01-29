@@ -1,6 +1,6 @@
 export type AuthMethod =
-  | { Password: { password: string } }
-  | { PublicKey: { privateKeyPath: string; passphrase?: string } };
+  | { password: { password: string } }
+  | { publicKey: { privateKeyPath: string; passphrase?: string } };
 
 export interface SessionConfig {
   id?: string;

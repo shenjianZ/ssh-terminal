@@ -69,7 +69,7 @@ fn default_keep_alive_interval() -> u64 {
 #[serde(rename_all = "camelCase")]
 pub enum AuthMethod {
     Password { password: String },
-    PublicKey { privateKeyPath: String, passphrase: Option<String> },
+    PublicKey { private_key_path: String, passphrase: Option<String> },
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

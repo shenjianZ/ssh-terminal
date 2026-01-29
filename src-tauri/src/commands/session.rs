@@ -16,6 +16,17 @@ pub async fn session_create(
     manager.create_session(config).await
 }
 
+/// 创建会话配置（指定ID）
+/// 用于从存储加载时使用已保存的ID
+#[tauri::command]
+pub async fn session_create_with_id(
+    manager: State<'_, SSHManagerState>,
+    id: String,
+    config: SessionConfig,
+) -> Result<String> {
+    manager.create_session_with_id(Some(id), config).await
+}
+
 /// 创建临时会话
 #[tauri::command]
 pub async fn session_create_temp(
