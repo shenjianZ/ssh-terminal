@@ -77,9 +77,9 @@ export function MobileSessionList() {
         host: config.host,
         port: config.port,
         username: config.username,
-        auth_method: config.password
+        authMethod: config.password
           ? { Password: { password: config.password } }
-          : { PublicKey: { private_key_path: config.privateKeyPath || '', passphrase: config.passphrase } },
+          : { PublicKey: { privateKeyPath: config.privateKeyPath || '', passphrase: config.passphrase } },
       });
 
       playSound(SoundEffect.SUCCESS);

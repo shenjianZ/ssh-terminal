@@ -104,6 +104,7 @@ impl ConnectionInstance {
             connected_at: *self.connected_at.lock().await,
             group: self.config.group.clone(),
             connection_session_id: Some(self.session_id.clone()),
+            connection_id: Some(self.id.clone()),
         }
     }
 

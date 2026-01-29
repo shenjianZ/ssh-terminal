@@ -6,6 +6,7 @@ pub mod recording;
 pub mod keybindings;
 pub mod audio;
 pub mod ai;
+pub mod ai_history;
 
 pub use session::*;
 pub use terminal::*;

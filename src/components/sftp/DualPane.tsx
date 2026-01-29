@@ -55,7 +55,7 @@ export function DualPane({ connectionId, remoteRefreshKey = 0, localRefreshKey =
     try {
       for (const file of selectedLocalFiles) {
         // 跳过目录
-        if (file.is_dir) {
+        if (file.isDir) {
           toast.warning(`跳过目录: ${file.name}`);
           continue;
         }
@@ -93,7 +93,7 @@ export function DualPane({ connectionId, remoteRefreshKey = 0, localRefreshKey =
     try {
       for (const file of selectedRemoteFiles) {
         // 跳过目录
-        if (file.is_dir) {
+        if (file.isDir) {
           toast.warning(`跳过目录: ${file.name}`);
           continue;
         }

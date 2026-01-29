@@ -1,6 +1,6 @@
 export type AuthMethod =
   | { Password: { password: string } }
-  | { PublicKey: { private_key_path: string; passphrase?: string } };
+  | { PublicKey: { privateKeyPath: string; passphrase?: string } };
 
 export interface SessionConfig {
   id?: string;
@@ -8,15 +8,15 @@ export interface SessionConfig {
   host: string;
   port: number;
   username: string;
-  auth_method: AuthMethod;
+  authMethod: AuthMethod;
   password?: string;
   privateKeyPath?: string;
   passphrase?: string;
-  terminal_type?: string;
+  terminalType?: string;
   columns?: number;
   rows?: number;
   /** 是否启用严格的主机密钥验证（默认true） */
-  strict_host_key_checking?: boolean;
+  strictHostKeyChecking?: boolean;
   /** 会话分组（默认为"默认分组"） */
   group?: string;
   /** 心跳间隔（秒），0表示禁用（默认30秒） */
@@ -37,4 +37,6 @@ export interface SessionInfo {
   group: string;
   /** 如果是连接实例，这个字段指向所属的session配置ID；如果是配置本身，这个字段为undefined */
   connectionSessionId?: string;
+  /** 如果是连接实例且已连接，这个字段存储实际的connectionId */
+  connectionId?: string;
 }

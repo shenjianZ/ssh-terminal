@@ -124,6 +124,17 @@ pub fn run() {
             commands::ai_clear_cache,
             commands::ai_get_cache_info,
             commands::ai_hot_reload,
+            // AI 对话历史命令
+            commands::ai_history::ai_history_list,
+            commands::ai_history::ai_history_get,
+            commands::ai_history::ai_history_save,
+            commands::ai_history::ai_history_delete,
+            commands::ai_history::ai_history_toggle_archive,
+            commands::ai_history::ai_history_update_title,
+            commands::ai_history::ai_history_export,
+            commands::ai_history::ai_history_list_by_server,
+            commands::ai_history::ai_history_list_by_server_id,
+            commands::ai_history::ai_history_update_connection_status,
             // AI 配置存储命令
             commands::storage_ai_config_save,
             commands::storage_ai_config_load,

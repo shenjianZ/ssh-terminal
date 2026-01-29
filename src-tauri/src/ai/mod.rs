@@ -4,6 +4,7 @@ pub mod provider;
 pub mod openai;
 pub mod ollama;
 pub mod manager;
+pub mod history;
 
 pub use provider::ChatMessage;
 pub use openai::OpenAIProvider;

@@ -15,9 +15,9 @@ export interface SftpFileInfo {
   /** 文件大小（字节） */
   size: number;
   /** 是否为目录 */
-  is_dir: boolean;
+  isDir: boolean;
   /** 是否为符号链接 */
-  is_symlink: boolean;
+  isSymlink: boolean;
   /** 修改时间（Unix 时间戳） */
   modified: number;
   /** Unix 权限模式 */
@@ -31,14 +31,14 @@ export interface SftpFileInfo {
 /**
  * 文件传输操作类型
  */
-export type TransferOperation = 'upload' | 'download' | 'remote_to_remote';
+export type TransferOperation = 'upload' | 'download' | 'remoteToRemote';
 
 /**
  * 传输源
  */
 export type TransferSource =
   | { type: 'local'; path: string }
-  | { type: 'remote'; connection_id: string; path: string };
+  | { type: 'remote'; connectionId: string; path: string };
 
 /**
  * 传输状态
@@ -47,7 +47,7 @@ export type TransferStatus =
   | 'pending'
   | 'in_progress'
   | 'completed'
-  | { Failed: string }
+  | 'failed'
   | 'cancelled';
 
 /**
@@ -63,7 +63,7 @@ export interface TransferProgress {
   /** 目标 */
   destination: TransferSource;
   /** 文件总大小 */
-  file_size: number;
+  fileSize: number;
   /** 已传输字节数 */
   transferred: number;
   /** 传输速度（字节/秒） */
@@ -167,10 +167,10 @@ export function parsePermissions(permissions: string): number {
  * 获取文件图标
  */
 export function getFileIcon(info: SftpFileInfo): string {
-  if (info.is_dir) {
+  if (info.isDir) {
     return '📁';
   }
-  if (info.is_symlink) {
+  if (info.isSymlink) {
     return '🔗';
   }
 

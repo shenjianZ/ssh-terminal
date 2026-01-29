@@ -40,12 +40,12 @@ export function QuickConnect({ open, onOpenChange, onConnect }: QuickConnectProp
         host,
         port: parseInt(port),
         username,
-        auth_method: {
+        authMethod: {
           Password: {
             password,
           },
         },
-        terminal_type: 'xterm-256color',
+        terminalType: 'xterm-256color',
         columns: 80,
         rows: 24,
       };

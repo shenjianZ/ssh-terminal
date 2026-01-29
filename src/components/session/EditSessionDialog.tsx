@@ -71,7 +71,7 @@ export function EditSessionDialog({
 
       // 如果输入了新密码，则更新认证信息
       if (formData.password) {
-        updates.auth_method = {
+        updates.authMethod = {
           Password: { password: formData.password }
         };
         updates.password = formData.password;

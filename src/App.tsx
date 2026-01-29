@@ -5,6 +5,7 @@ import { Terminal } from "@/pages/Terminal";
 import { SessionManager } from "@/pages/SessionManager";
 import { Settings } from "@/pages/Settings";
 import { SftpManager } from "@/pages/SftpManager";
+import { AIChatPage } from "@/pages/AIChatPage";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { useTerminalConfigStore } from "@/store/terminalConfigStore";
@@ -114,6 +115,8 @@ function AppContent() {
           <Route path="/sessions" element={<SessionManager />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/sftp" element={<SftpManager />} />
+          <Route path="/ai-chat" element={<AIChatPage />} />
+          <Route path="/ai-chat/:conversationId" element={<AIChatPage />} />
         </Routes>
       </MainLayout>
       <Toaster position="top-center" />

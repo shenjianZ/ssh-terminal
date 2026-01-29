@@ -159,7 +159,7 @@ export function FileList({
                 <span className="truncate text-sm">{file.name}</span>
               </div>
               <div className="col-span-2 flex items-center text-xs text-muted-foreground">
-                {file.is_dir ? '-' : formatFileSize(file.size)}
+                {file.isDir ? '-' : formatFileSize(file.size)}
               </div>
               <div className="col-span-2 flex items-center text-xs text-muted-foreground">
                 {formatTimestamp(file.modified)}

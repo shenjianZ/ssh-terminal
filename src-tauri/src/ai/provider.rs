@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// 聊天消息
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,

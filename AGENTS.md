@@ -269,6 +269,12 @@ TODO: 添加端到端测试和前端单元测试
   - 使用 `#[tauri::command]` 宏标记命令函数
   - 命令参数和返回值必须实现 `serde::Serialize` 和 `serde::Deserialize`
   - 在 `lib.rs` 中注册命令
+- **跨语言类型转换**：
+  - Rust Struct 字段使用 **snake_case**
+  - 添加 `#[serde(rename_all = "camelCase")]` 自动转换为 camelCase
+  - Rust Enum 变体使用 **PascalCase**，通过 serde 转换为 camelCase
+  - 类型名称（Struct/Enum）在两端保持 PascalCase
+  - 详见 `docs/Tauri_Naming_Conventions.md`
 
 ### 文件组织
 
@@ -582,7 +588,16 @@ const message = await invoke('greet', { name: 'World' });
 
 ## 故障排查
 
-### 常见问题
+### 类型转换问题
+
+如果遇到 Rust 端和前端类型不匹配的问题，请参考：
+- **命名规范文档**：`docs/Tauri_Naming_Conventions.md`
+- **常见错误**：
+  - Rust Struct/Enum 缺少 `#[serde(rename_all = "camelCase")]` 注解
+  - 前端类型定义字段名与 Rust 序列化后不一致
+  - Enum 变体命名不符合规范
+
+## 常见问题
 
 1. **SSH 连接失败**
    - 检查系统 SSH 客户端是否安装

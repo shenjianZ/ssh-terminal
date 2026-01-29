@@ -9,6 +9,7 @@ pub use manager::SftpManager;
 
 /// SFTP 文件信息
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SftpFileInfo {
     pub name: String,
     pub path: String,
@@ -40,6 +41,7 @@ impl From<russh_sftp::protocol::FileAttributes> for SftpFileInfo {
 
 /// 文件传输操作类型
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum TransferOperation {
     Upload,
     Download,
@@ -49,13 +51,15 @@ pub enum TransferOperation {
 /// 传输源
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum TransferSource {
     Local { path: String },
-    Remote { connection_id: String, path: String },
+    Remote { connectionId: String, path: String },
 }
 
 /// 传输状态
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum TransferStatus {
     Pending,
     InProgress,
@@ -66,6 +70,7 @@ pub enum TransferStatus {
 
 /// 文件传输进度
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TransferProgress {
     pub id: String,
     pub operation: TransferOperation,

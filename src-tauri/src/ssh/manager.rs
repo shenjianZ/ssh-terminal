@@ -443,6 +443,7 @@ impl SSHManager {
                 connected_at: None,
                 group: config.group.clone(),
                 connection_session_id: None,  // 配置本身
+                connection_id: None,  // 配置本身没有 connection_id
             });
         }
 

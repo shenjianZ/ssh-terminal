@@ -13,6 +13,7 @@ pub struct KeybindingsStorage {
 
 /// 快捷键数据
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct KeybindingsData {
     pub keybindings: std::collections::HashMap<String, KeyCombination>,
     pub presets: Vec<KeybindingPreset>,
@@ -20,6 +21,7 @@ pub struct KeybindingsData {
 
 /// 快捷键组合
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct KeyCombination {
     pub ctrl: bool,
     pub alt: bool,
@@ -29,6 +31,7 @@ pub struct KeyCombination {
 
 /// 快捷键预设
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct KeybindingPreset {
     pub id: String,
     pub name: String,

@@ -2,11 +2,12 @@
 
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import type { ChatMessage } from '@/types/ai';
+import type { ChatMessage, AIConversation, ServerConversationGroup, ServerIdentity } from '@/types/ai';
 import { AIClient } from '@/lib/ai/aiClient';
 import { aiCache } from '@/lib/ai/cache';
 import { DEFAULT_SYSTEM_PROMPT } from '@/lib/ai/promptTemplates';
 import { playSound, SoundEffect } from '@/lib/sounds';
+import { AIHistoryManager } from '@/lib/ai/historyManager';
 
 interface AIStore {
   // 配置
@@ -14,87 +15,56 @@ interface AIStore {
   isLoading: boolean;
   error: string | null;
 
-  // 对话历史
-  conversations: Map<string, ChatMessage[]>;
-  currentConnectionId: string | null;
+  // 对话历史（内存 - 按服务器身份）
+  conversations: Map<string, ChatMessage[]>;  // serverId -> messages
+  currentServerId: string | null;             // 当前选中的服务器 ID
+  currentConnectionId: string | null;         // 当前活跃的连接 ID（用于实时终端交互）
+
+  // 历史记录管理（持久化）
+  serverGroups: ServerConversationGroup[];    // 按服务器分组的历史
+  selectedConversationId: string | null;      // 当前选中的对话 ID
+
+  // 连接状态追踪
+  activeConnections: Set<string>;            // 当前活跃的 connectionId
 
   // 流式状态
-  streamingConnectionId: string | null;  // 当前正在流式生成的连接ID
+  streamingServerId: string | null;          // 当前正在流式生成的服务器ID
 
   // UI 状态
   isChatOpen: boolean;
 
   // ========== 配置管理 ==========
 
-  /**
-   * 加载 AI 配置
-   */
   loadConfig: () => Promise<void>;
-
-  /**
-   * 保存 AI 配置
-   */
   saveConfig: (config: any) => Promise<void>;
-
-  /**
-   * 获取默认配置
-   */
   getDefaultConfig: () => Promise<any>;
 
   // ========== AI 操作 ==========
 
-  /**
-   * 发送聊天消息
-   */
-  sendMessage: (connectionId: string, message: string) => Promise<string>;
-
-  /**
-   * 解释命令
-   */
+  sendMessage: (serverId: string, message: string) => Promise<string>;
   explainCommand: (command: string) => Promise<string>;
-
-  /**
-   * 自然语言转命令
-   */
   naturalLanguageToCommand: (input: string) => Promise<string>;
-
-  /**
-   * 分析错误
-   */
   analyzeError: (error: string) => Promise<string>;
-
-  /**
-   * 测试连接
-   */
   testConnection: (providerId: string) => Promise<boolean>;
 
   // ========== 对话历史管理 ==========
 
-  /**
-   * 获取对话历史
-   */
-  getConversationHistory: (connectionId: string) => ChatMessage[];
+  getConversationHistory: (serverId: string) => ChatMessage[];
+  clearConversation: (serverId: string) => void;
 
-  /**
-   * 清空对话历史
-   */
-  clearConversation: (connectionId: string) => void;
+  // 新增：按服务器分组的历史管理
+
+  loadServerGroups: () => Promise<void>;
+  selectServer: (serverId: string) => Promise<void>;
+  selectConversation: (conversationId: string) => Promise<void>;
+  createConversation: (serverId: string) => void;
+  isServerOnline: (serverId: string) => boolean;
+  updateActiveConnections: (connectionIds: string[]) => void;
 
   // ========== UI 控制 ==========
 
-  /**
-   * 切换聊天面板
-   */
   toggleChat: () => void;
-
-  /**
-   * 打开聊天面板
-   */
   openChat: () => void;
-
-  /**
-   * 关闭聊天面板
-   */
   closeChat: () => void;
 }
 
@@ -104,8 +74,12 @@ export const useAIStore = create<AIStore>((set, get) => ({
   isLoading: false,
   error: null,
   conversations: new Map(),
+  currentServerId: null,
   currentConnectionId: null,
-  streamingConnectionId: null,
+  serverGroups: [],
+  selectedConversationId: null,
+  activeConnections: new Set(),
+  streamingServerId: null,
   isChatOpen: false,
 
   // ========== 配置管理 ==========
@@ -145,7 +119,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
   // ========== AI 操作 ==========
 
-  sendMessage: async (connectionId: string, message: string) => {
+  sendMessage: async (serverId: string, message: string) => {
     const { config, conversations } = get();
 
     if (!config) {
@@ -159,34 +133,33 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
     // 添加用户消息到历史
     const userMessage: ChatMessage = { role: 'user', content: message };
-    const history = conversations.get(connectionId) || [];
+    const history = conversations.get(serverId) || [];
     const newHistory = [...history, userMessage];
 
     // 添加一个空的 assistant 消息（用于流式更新）
     const assistantMessage: ChatMessage = { role: 'assistant', content: '' };
     const updatedHistory = [...newHistory, assistantMessage];
 
-    // 更新对话历史（立即显示用户消息和空的 assistant 消息）
+    // 更新对话历史
     const newConversations = new Map(conversations);
-    newConversations.set(connectionId, updatedHistory);
-    set({ conversations: newConversations, streamingConnectionId: connectionId, isLoading: true, error: null });
+    newConversations.set(serverId, updatedHistory);
+    set({ conversations: newConversations, streamingServerId: serverId, isLoading: true, error: null });
 
     try {
       // 添加系统提示词
       const systemMessage: ChatMessage = { role: 'system', content: DEFAULT_SYSTEM_PROMPT };
 
-      // 调用流式 AI API（包含系统提示词 + 最近 20 条消息作为上下文）
+      // 调用流式 AI API
       const contextMessages = [systemMessage, ...newHistory.slice(-20)];
 
       await AIClient.chatStream(provider, contextMessages, (chunk) => {
-        // 增量更新 assistant 消息内容
         const { conversations } = get();
-        const currentConv = conversations.get(connectionId);
+        const currentConv = conversations.get(serverId);
         if (currentConv && currentConv.length > 0) {
           const lastMessage = currentConv[currentConv.length - 1];
           if (lastMessage.role === 'assistant') {
             const updatedConv = new Map(conversations);
-            updatedConv.set(connectionId, [
+            updatedConv.set(serverId, [
               ...currentConv.slice(0, -1),
               { ...lastMessage, content: lastMessage.content + chunk }
             ]);
@@ -195,10 +168,18 @@ export const useAIStore = create<AIStore>((set, get) => ({
         }
       });
 
-      set({ streamingConnectionId: null, isLoading: false });
-
-      // 播放流式完成音效
+      set({ streamingServerId: null, isLoading: false });
       playSound(SoundEffect.AI_STREAM_COMPLETE);
+
+      // 自动保存对话到历史记录
+      const { conversations: finalConversations } = get();
+      const finalHistory = finalConversations.get(serverId);
+      if (finalHistory && finalHistory.length > 0) {
+        const conversation = buildConversation(serverId, finalHistory);
+        await AIHistoryManager.saveConversation(conversation).catch(err => {
+          console.error('[AIStore] Failed to save conversation:', err);
+        });
+      }
 
       return '';
     } catch (error) {
@@ -207,14 +188,14 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
       // 移除失败的 assistant 消息
       const { conversations } = get();
-      const currentConv = conversations.get(connectionId);
+      const currentConv = conversations.get(serverId);
       if (currentConv && currentConv.length > 0 && currentConv[currentConv.length - 1].role === 'assistant') {
         const updatedConv = new Map(conversations);
-        updatedConv.set(connectionId, currentConv.slice(0, -1));
+        updatedConv.set(serverId, currentConv.slice(0, -1));
         set({ conversations: updatedConv });
       }
 
-      set({ error: errorMsg, streamingConnectionId: null, isLoading: false });
+      set({ error: errorMsg, streamingServerId: null, isLoading: false });
       throw error;
     }
   },
@@ -231,7 +212,6 @@ export const useAIStore = create<AIStore>((set, get) => ({
       throw new Error('没有可用的 AI Provider');
     }
 
-    // 检查缓存
     const cached = aiCache.get('explain', command);
     if (cached) {
       console.log('[AIStore] Using cached response for command explanation');
@@ -242,10 +222,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
     try {
       const response = await AIClient.explainCommand(provider, command);
-
-      // 缓存响应
       aiCache.set('explain', command, response);
-
       set({ isLoading: false });
       return response;
     } catch (error) {
@@ -294,7 +271,6 @@ export const useAIStore = create<AIStore>((set, get) => ({
       throw new Error('没有可用的 AI Provider');
     }
 
-    // 检查缓存
     const cached = aiCache.get('analyze_error', error);
     if (cached) {
       console.log('[AIStore] Using cached response for error analysis');
@@ -305,10 +281,7 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
     try {
       const analysis = await AIClient.analyzeError(provider, error);
-
-      // 缓存响应
       aiCache.set('analyze_error', error, analysis);
-
       set({ isLoading: false });
       return analysis;
     } catch (error) {
@@ -347,16 +320,66 @@ export const useAIStore = create<AIStore>((set, get) => ({
 
   // ========== 对话历史管理 ==========
 
-  getConversationHistory: (connectionId: string) => {
+  getConversationHistory: (serverId: string) => {
     const { conversations } = get();
-    return conversations.get(connectionId) || [];
+    return conversations.get(serverId) || [];
   },
 
-  clearConversation: (connectionId: string) => {
+  clearConversation: (serverId: string) => {
     const { conversations } = get();
     const newConversations = new Map(conversations);
-    newConversations.delete(connectionId);
+    newConversations.delete(serverId);
     set({ conversations: newConversations });
+  },
+
+  // ========== 按服务器分组的历史管理 ==========
+
+  loadServerGroups: async () => {
+    try {
+      const groups = await AIHistoryManager.listServerGroups();
+      set({ serverGroups: groups });
+    } catch (error) {
+      console.error('[AIStore] Failed to load server groups:', error);
+    }
+  },
+
+  selectServer: async (serverId: string) => {
+    set({ currentServerId: serverId, selectedConversationId: null });
+
+    // 加载该服务器的对话历史
+    const conversations = await AIHistoryManager.listConversationsByServer(serverId);
+    if (conversations.length > 0) {
+      // TODO: 加载完整对话内容
+      console.log('[AIStore] Found conversations for server:', conversations.length);
+    }
+  },
+
+  selectConversation: async (conversationId: string) => {
+    set({ selectedConversationId: conversationId });
+    // TODO: 加载完整对话内容
+  },
+
+  createConversation: (serverId: string) => {
+    // 为指定服务器创建新对话
+    const { conversations } = get();
+    const newConversations = new Map(conversations);
+    newConversations.set(serverId, []);
+    set({
+      conversations: newConversations,
+      currentServerId: serverId,
+      selectedConversationId: null
+    });
+  },
+
+  isServerOnline: (_serverId: string) => {
+    const { activeConnections } = get();
+    // 简化实现：只要有任何活跃连接就认为服务器在线
+    // TODO: 未来可以根据 serverId -> connectionId 映射更精确地判断
+    return activeConnections.size > 0;
+  },
+
+  updateActiveConnections: (connectionIds: string[]) => {
+    set({ activeConnections: new Set(connectionIds) });
   },
 
   // ========== UI 控制 ==========
@@ -374,3 +397,52 @@ export const useAIStore = create<AIStore>((set, get) => ({
     set({ isChatOpen: false });
   },
 }));
+
+// ========== 辅助函数 ==========
+
+/**
+ * 构建会话对象（用于持久化存储）
+ *
+ * 注意：这个函数需要 ServerIdentity 信息，暂时使用默认值
+ * 实际使用时应该从 terminalStore 或 sessionStore 获取完整的 Session 信息
+ */
+function buildConversation(serverId: string, messages: ChatMessage[]): AIConversation {
+  const firstUserMessage = messages.find(m => m.role === 'user');
+  const now = new Date().toISOString();
+
+  // TODO: 从 sessionStore 获取完整的 ServerIdentity
+  // 暂时使用默认值
+  const serverIdentity: ServerIdentity = {
+    sessionId: serverId,
+    sessionName: '服务器',
+    host: 'unknown',
+    port: 22,
+    username: 'unknown',
+  };
+
+  return {
+    meta: {
+      id: `${serverId}-${Date.now()}`, // 生成唯一 ID
+      title: generateTitle(firstUserMessage?.content || '新对话'),
+      serverIdentity: serverIdentity,
+      connectionInstanceId: serverId, // 可选
+      createdAt: now,
+      updatedAt: now,
+      messageCount: messages.length,
+      isArchived: false,
+      connectionStatus: 'active' as const,
+    },
+    messages: messages.map(m => ({
+      ...m,
+      timestamp: now,
+    })),
+  };
+}
+
+/**
+ * 生成会话标题
+ */
+function generateTitle(firstMessage: string): string {
+  const title = firstMessage.slice(0, 30);
+  return title.length < firstMessage.length ? `${title}...` : title;
+}

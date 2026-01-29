@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionConfig {
     pub name: String,
     pub host: String,
@@ -26,6 +27,7 @@ pub struct SessionConfig {
 
 /// 用于部分更新会话配置的结构体
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionConfigUpdate {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -64,13 +66,14 @@ fn default_keep_alive_interval() -> u64 {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub enum AuthMethod {
     Password { password: String },
-    PublicKey { private_key_path: String, passphrase: Option<String> },
+    PublicKey { privateKeyPath: String, passphrase: Option<String> },
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum SessionStatus {
     Disconnected,
     Connecting,
@@ -79,6 +82,7 @@ pub enum SessionStatus {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionInfo {
     pub id: String,
     pub name: String,
@@ -90,6 +94,9 @@ pub struct SessionInfo {
     pub group: String,
     /// 如果是连接实例，这个字段指向所属的session配置ID
     /// 如果是配置本身，这个字段为null
-    #[serde(rename = "connectionSessionId", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub connection_session_id: Option<String>,
+    /// 如果是连接实例且已连接，这个字段存储实际的connectionId
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection_id: Option<String>,
 }

@@ -2,13 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { invoke } from '@tauri-apps/api/core';
 import type { SessionConfig, SessionInfo } from '@/types/ssh';
+import { useAIStore } from './aiStore';
 
 // 将前端扁平化的认证配置转换为后端 AuthMethod 枚举格式
 function convertAuthMethod(config: SessionConfig) {
-  if ('Password' in config.auth_method) {
-    return config.auth_method;
+  if ('Password' in config.authMethod) {
+    return config.authMethod;
   } else {
-    return config.auth_method;
+    return config.authMethod;
   }
 }
 
@@ -46,13 +47,13 @@ export const useSessionStore = create<SessionStore>()(
           host: config.host,
           port: config.port,
           username: config.username,
-          auth_method: convertAuthMethod(config),
-          terminal_type: config.terminal_type,
+          authMethod: convertAuthMethod(config),
+          terminalType: config.terminalType,
           columns: config.columns,
           rows: config.rows,
-          strict_host_key_checking: config.strict_host_key_checking ?? true,
+          strictHostKeyChecking: config.strictHostKeyChecking ?? true,
           group: config.group || '默认分组',
-          keep_alive_interval: config.keepAliveInterval ?? 30,
+          keepAliveInterval: config.keepAliveInterval ?? 30,
         };
 
         const connectionId = await invoke<string>('session_create_temp', {
@@ -60,6 +61,11 @@ export const useSessionStore = create<SessionStore>()(
         });
 
         console.log('Created temporary connection:', connectionId);
+
+        // 更新 AI Store 的活跃连接列表
+        const aiStore = useAIStore.getState();
+        const currentActive = Array.from(aiStore.activeConnections);
+        aiStore.updateActiveConnections([...currentActive, connectionId]);
 
         return connectionId;
       },
@@ -71,13 +77,13 @@ export const useSessionStore = create<SessionStore>()(
           host: config.host,
           port: config.port,
           username: config.username,
-          auth_method: convertAuthMethod(config),
-          terminal_type: config.terminal_type,
+          authMethod: convertAuthMethod(config),
+          terminalType: config.terminalType,
           columns: config.columns,
           rows: config.rows,
-          strict_host_key_checking: config.strict_host_key_checking ?? true,
+          strictHostKeyChecking: config.strictHostKeyChecking ?? true,
           group: config.group || '默认分组',
-          keep_alive_interval: config.keepAliveInterval ?? 30,
+          keepAliveInterval: config.keepAliveInterval ?? 30,
         };
 
         const sessionId = await invoke<string>('session_create', {
@@ -117,6 +123,11 @@ export const useSessionStore = create<SessionStore>()(
         const sessions = await invoke<SessionInfo[]>('session_list');
         set({ sessions });
 
+        // 更新 AI Store 的活跃连接列表
+        const aiStore = useAIStore.getState();
+        const currentActive = Array.from(aiStore.activeConnections);
+        aiStore.updateActiveConnections([...currentActive, connectionId]);
+
         return connectionId;
       },
 
@@ -130,12 +141,12 @@ export const useSessionStore = create<SessionStore>()(
             port: config.port,
             username: config.username,
             group: config.group || '默认分组',
-            auth_method: config.auth_method,
-            terminal_type: config.terminal_type,
+            authMethod: config.authMethod,
+            terminalType: config.terminalType,
             columns: config.columns,
             rows: config.rows,
-            strict_host_key_checking: config.strict_host_key_checking ?? true,
-            keep_alive_interval: config.keepAliveInterval ?? 30,
+            strictHostKeyChecking: config.strictHostKeyChecking ?? true,
+            keepAliveInterval: config.keepAliveInterval ?? 30,
           }
         });
 
@@ -179,6 +190,11 @@ export const useSessionStore = create<SessionStore>()(
         console.log(`[sessionStore] Loaded sessions:`, sessions);
         set({ sessions });
 
+        // 更新 AI Store 的活跃连接列表
+        const aiStore = useAIStore.getState();
+        const currentActive = Array.from(aiStore.activeConnections);
+        aiStore.updateActiveConnections([...currentActive, connectionId]);
+
         return connectionId;
       },
 
@@ -196,12 +212,32 @@ export const useSessionStore = create<SessionStore>()(
         // 重新加载sessions列表
         const sessions = await invoke<SessionInfo[]>('session_list');
         set({ sessions });
+
+        // 更新 AI Store 的活跃连接列表
+        // 注意：这里需要找到对应的 connectionId 并移除
+        // 暂时简化处理，直接重新加载所有活跃连接
+        const activeConnectionIds = sessions
+          .filter(s => s.status === 'connected')
+          .map(s => s.connectionId)
+          .filter((id): id is string => id !== undefined);
+
+        const aiStore = useAIStore.getState();
+        aiStore.updateActiveConnections(activeConnectionIds);
       },
 
       loadSessions: async () => {
         try {
           const sessions = await invoke<SessionInfo[]>('session_list');
           set({ sessions });
+
+          // 初始化 AI Store 的活跃连接列表
+          const activeConnectionIds = sessions
+            .filter(s => s.status === 'connected')
+            .map(s => s.connectionId)
+            .filter((id): id is string => id !== undefined);
+
+          const aiStore = useAIStore.getState();
+          aiStore.updateActiveConnections(activeConnectionIds);
         } catch (error) {
           console.error('Failed to load sessions:', error);
         }

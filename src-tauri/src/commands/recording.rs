@@ -17,7 +17,7 @@ pub async fn fs_write_file(path: String, contents: Vec<u8>) -> std::result::Resu
 
 /// 录制事件类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum RecordingEventType {
     Input,
     Output,
@@ -27,6 +27,7 @@ pub enum RecordingEventType {
 
 /// 录制事件
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RecordingEvent {
     pub timestamp: i64,
     #[serde(rename = "type")]
@@ -36,6 +37,7 @@ pub struct RecordingEvent {
 
 /// 终端尺寸
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TerminalSize {
     pub cols: u16,
     pub rows: u16,

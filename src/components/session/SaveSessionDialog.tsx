@@ -95,13 +95,13 @@ export function SaveSessionDialog({
         host: formData.host,
         port: parseInt(formData.port),
         username: formData.username,
-        auth_method: formData.authMethod === 'password'
+        authMethod: formData.authMethod === 'password'
           ? { Password: { password: formData.password || '' } }
-          : { PublicKey: { private_key_path: formData.privateKeyPath || '', passphrase: formData.passphrase } },
+          : { PublicKey: { privateKeyPath: formData.privateKeyPath || '', passphrase: formData.passphrase } },
         password: formData.authMethod === 'password' ? formData.password : undefined,
         privateKeyPath: formData.authMethod === 'publicKey' ? formData.privateKeyPath : undefined,
         passphrase: formData.authMethod === 'publicKey' ? formData.passphrase : undefined,
-        terminal_type: formData.terminalType,
+        terminalType: formData.terminalType,
         group: formData.group || '默认分组',
       });
 

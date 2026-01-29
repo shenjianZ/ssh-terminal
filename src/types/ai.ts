@@ -59,3 +59,67 @@ export interface ConversationHistory {
  * AI 命令类型
  */
 export type AICommandType = 'chat' | 'explain_command' | 'generate_command' | 'analyze_error';
+
+/**
+ * 连接状态
+ */
+export type ConnectionStatus = 'active' | 'inactive';
+
+/**
+ * 服务器身份信息
+ */
+export interface ServerIdentity {
+  sessionId: string;
+  sessionName: string;
+  host: string;
+  port: number;
+  username: string;
+}
+
+/**
+ * AI 对话历史消息（持久化）
+ */
+export interface AIChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string; // ISO 8601 格式
+}
+
+/**
+ * AI 对话会话元数据
+ */
+export interface AIConversationMeta {
+  id: string;
+  title: string;
+  serverIdentity: ServerIdentity;
+  connectionInstanceId?: string;
+  createdAt: string; // ISO 8601 格式
+  updatedAt: string; // ISO 8601 格式
+  messageCount: number;
+  isArchived: boolean;
+  connectionStatus: ConnectionStatus;
+}
+
+/**
+ * AI 对话会话完整数据
+ */
+export interface AIConversation {
+  meta: AIConversationMeta;
+  messages: AIChatMessage[];
+}
+
+/**
+ * 按服务器分组的对话列表
+ */
+export interface ServerConversationGroup {
+  serverIdentity: ServerIdentity;
+  conversations: AIConversationMeta[];
+  totalConversations: number;
+  activeConnectionCount: number;
+  latestConversationAt?: string;
+}
+
+/**
+ * 导出格式
+ */
+export type ExportFormat = 'markdown' | 'json' | 'text';

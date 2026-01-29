@@ -174,7 +174,7 @@ export function FilePane({
       if (type === 'remote' && connectionId) {
         // 调用后端删除API
         for (const file of selectedFiles) {
-          if (file.is_dir) {
+          if (file.isDir) {
             await invoke('sftp_remove_dir', {
               connectionId,
               path: file.path,
@@ -375,7 +375,7 @@ export function FilePane({
   const handleFileDoubleClick = async (file: SftpFileInfo) => {
     console.log('Double clicked file:', file);
 
-    if (file.is_dir) {
+    if (file.isDir) {
       // 进入目录
       const newPath = joinPath(path, file.name);
       console.log('Navigating to:', newPath);
