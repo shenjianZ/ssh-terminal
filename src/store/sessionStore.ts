@@ -16,6 +16,7 @@ function convertAuthMethod(config: SessionConfig) {
 interface SessionStore {
   sessions: SessionInfo[];
   isStorageLoaded: boolean; // 标记是否已从存储加载
+  sessionConfigs: Map<string, SessionConfig>; // 缓存完整的会话配置
 
   // 操作
   createTemporaryConnection: (config: SessionConfig) => Promise<string>; // 快速连接，不保存
@@ -32,6 +33,7 @@ interface SessionStore {
   // 查询
   getSession: (id: string) => SessionInfo | undefined;
   getActiveSession: () => SessionInfo | undefined;
+  getSessionConfig: (id: string) => SessionConfig | undefined; // 获取完整的会话配置
 }
 
 export const useSessionStore = create<SessionStore>()(
@@ -39,6 +41,7 @@ export const useSessionStore = create<SessionStore>()(
     (set, get) => ({
       sessions: [],
       isStorageLoaded: false,
+      sessionConfigs: new Map(),
 
       createTemporaryConnection: async (config) => {
         // 快速连接：直接创建临时连接，不保存到后端
@@ -100,6 +103,13 @@ export const useSessionStore = create<SessionStore>()(
         } catch (error) {
           console.error('Failed to create session in memory:', error);
         }
+
+        // 缓存配置
+        set((state) => {
+          const newMap = new Map(state.sessionConfigs);
+          newMap.set(sessionId, sessionConfig);
+          return { sessionConfigs: newMap };
+        });
 
         // 创建新的会话对象
         const newSession: SessionInfo = {
@@ -176,6 +186,21 @@ export const useSessionStore = create<SessionStore>()(
           console.error('Failed to update session in memory:', error);
         }
 
+        // 更新缓存中的配置
+        if (config.authMethod) {
+          set((state) => {
+            const newMap = new Map(state.sessionConfigs);
+            const existingConfig = newMap.get(id);
+            if (existingConfig) {
+              newMap.set(id, {
+                ...existingConfig,
+                ...config,
+              });
+            }
+            return { sessionConfigs: newMap };
+          });
+        }
+
         set((state) => ({
           sessions: state.sessions.map((s) =>
             s.id === id ? { ...s, ...config } : s
@@ -193,6 +218,13 @@ export const useSessionStore = create<SessionStore>()(
         } catch (error) {
           console.error('Failed to delete session from memory:', error);
         }
+
+        // 从缓存中删除配置
+        set((state) => {
+          const newMap = new Map(state.sessionConfigs);
+          newMap.delete(id);
+          return { sessionConfigs: newMap };
+        });
 
         set((state) => ({
           sessions: state.sessions.filter((s) => s.id !== id),
@@ -283,6 +315,13 @@ export const useSessionStore = create<SessionStore>()(
           const sessionConfigs = await invoke<[string, SessionConfig][]>('storage_sessions_load');
           console.log('[sessionStore] Loaded session configs from storage:', sessionConfigs.length);
 
+          // 3. 缓存所有会话配置到 Map
+          const configMap = new Map<string, SessionConfig>();
+          for (const [id, config] of sessionConfigs) {
+            configMap.set(id, config);
+          }
+          set({ sessionConfigs: configMap });
+
           if (sessionConfigs.length === 0) {
             console.log('[sessionStore] No session configs in storage, skipping creation');
             // 重新加载会话列表
@@ -291,7 +330,7 @@ export const useSessionStore = create<SessionStore>()(
             return;
           }
 
-          // 3. 为每个配置创建session（使用保存的ID）
+          // 4. 为每个配置创建session（使用保存的ID）
           let createdCount = 0;
           let skippedCount = 0;
           for (const [id, config] of sessionConfigs) {
@@ -318,7 +357,7 @@ export const useSessionStore = create<SessionStore>()(
 
           console.log(`[sessionStore] Session creation summary: ${createdCount} created, ${skippedCount} skipped`);
 
-          // 4. 重新加载会话列表
+          // 5. 重新加载会话列表
           const sessions = await invoke<SessionInfo[]>('session_list');
           set({ sessions });
           console.log('[sessionStore] Final loaded sessions:', sessions.length);
@@ -346,6 +385,10 @@ export const useSessionStore = create<SessionStore>()(
         const { sessions } = get();
         // 返回第一个已连接的会话，如果没有则返回undefined
         return sessions.find((s) => s.status === 'connected');
+      },
+
+      getSessionConfig: (id: string) => {
+        return get().sessionConfigs.get(id);
       },
     }),
     {

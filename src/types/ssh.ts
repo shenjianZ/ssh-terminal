@@ -9,9 +9,6 @@ export interface SessionConfig {
   port: number;
   username: string;
   authMethod: AuthMethod;
-  password?: string;
-  privateKeyPath?: string;
-  passphrase?: string;
   terminalType?: string;
   columns?: number;
   rows?: number;

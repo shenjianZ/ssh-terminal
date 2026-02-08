@@ -19,10 +19,11 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export function SessionManager() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sessions, loadSessions, loadSessionsFromStorage, createSession, isStorageLoaded } = useSessionStore();
+  const { sessions, loadSessions, loadSessionsFromStorage, createSession, isStorageLoaded, getSessionConfig } = useSessionStore();
   const { config: terminalConfig } = useTerminalConfigStore();
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<SessionInfo | null>(null);
+  const [editingSessionConfig, setEditingSessionConfig] = useState<SessionConfig | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
@@ -77,7 +78,9 @@ export function SessionManager() {
   };
 
   const handleEditSession = (session: SessionInfo) => {
+    const config = getSessionConfig(session.id);
     setEditingSession(session);
+    setEditingSessionConfig(config || null);
   };
 
   const handleUpdateSession = async (config: Partial<SessionConfig>) => {
@@ -281,8 +284,14 @@ export function SessionManager() {
       {editingSession && (
         <EditSessionDialog
           open={!!editingSession}
-          onOpenChange={(open) => !open && setEditingSession(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingSession(null);
+              setEditingSessionConfig(null);
+            }
+          }}
           session={editingSession}
+          sessionConfig={editingSessionConfig}
           onUpdate={handleUpdateSession}
         />
       )}

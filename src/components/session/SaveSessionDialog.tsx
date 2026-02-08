@@ -98,9 +98,6 @@ export function SaveSessionDialog({
         authMethod: formData.authMethod === 'password'
           ? { password: { password: formData.password || '' } }
           : { publicKey: { privateKeyPath: formData.privateKeyPath || '', passphrase: formData.passphrase } },
-        password: formData.authMethod === 'password' ? formData.password : undefined,
-        privateKeyPath: formData.authMethod === 'publicKey' ? formData.privateKeyPath : undefined,
-        passphrase: formData.authMethod === 'publicKey' ? formData.passphrase : undefined,
         terminalType: formData.terminalType,
         group: formData.group || '默认分组',
       });

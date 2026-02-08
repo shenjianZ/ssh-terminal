@@ -58,35 +58,52 @@ pub async fn storage_sessions_save(
     Ok(())
 }
 
-/// 创建会话并直接保存到存储
+/// 创建会话并直接保存到存储（优化版：无需解密现有会话）
 #[tauri::command]
 pub async fn storage_session_create(
     config: SessionConfig,
     app: AppHandle,
 ) -> Result<String> {
+    use crate::config::storage::{SessionStorage, SavedSession};
+
     let storage = Storage::new(Some(&app))?;
 
     // 生成新的会话ID
     let session_id = uuid::Uuid::new_v4().to_string();
 
-    // 加载现有会话
-    let mut existing_sessions = match storage.load_sessions() {
-        Ok(sessions) => sessions,
-        Err(_) => Vec::new(),
+    // 加密新会话
+    let saved_session = storage.encrypt_session_for_storage(session_id.clone(), config)?;
+
+    // 读取现有存储（不解密）
+    let mut storage_data = if storage.storage_path_exists() {
+        let content = std::fs::read_to_string(&storage.get_storage_path())
+            .map_err(|e| crate::error::SSHError::Storage(format!("Failed to read storage file: {}", e)))?;
+
+        serde_json::from_str::<SessionStorage>(&content)
+            .map_err(|e| crate::error::SSHError::Storage(format!("Failed to parse storage file: {}", e)))?
+    } else {
+        SessionStorage {
+            version: "1.0".to_string(),
+            sessions: Vec::new(),
+        }
     };
 
-    // 添加新会话
-    existing_sessions.push((session_id.clone(), config));
+    // 追加新会话
+    storage_data.sessions.push(saved_session);
 
-    // 保存回文件
-    storage.save_sessions(&existing_sessions)?;
+    // 直接保存（无需重新加密现有会话）
+    let new_content = serde_json::to_string_pretty(&storage_data)
+        .map_err(|e| crate::error::SSHError::Storage(format!("Failed to serialize sessions: {}", e)))?;
+
+    // 使用原子写入
+    storage.write_to_file(&new_content)?;
 
     println!("Created and saved session: {}", session_id);
 
     Ok(session_id)
 }
 
-/// 删除会话并直接更新存储
+/// 删除会话并直接更新存储（优化版：无需解密/加密）
 #[tauri::command]
 pub async fn storage_session_delete(
     session_id: String,
@@ -94,22 +111,8 @@ pub async fn storage_session_delete(
 ) -> Result<()> {
     let storage = Storage::new(Some(&app))?;
 
-    // 加载现有会话
-    let existing_sessions = match storage.load_sessions() {
-        Ok(sessions) => sessions,
-        Err(_) => Vec::new(),
-    };
-
-    // 过滤掉要删除的会话
-    let updated_sessions: Vec<(String, SessionConfig)> = existing_sessions
-        .into_iter()
-        .filter(|(id, _)| id != &session_id)
-        .collect();
-
-    // 保存回文件
-    storage.save_sessions(&updated_sessions)?;
-
-    println!("Deleted session from storage: {}", session_id);
+    // 使用优化的删除方法
+    storage.delete_session_by_id(&session_id)?;
 
     Ok(())
 }

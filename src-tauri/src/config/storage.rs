@@ -188,6 +188,9 @@ impl Storage {
         fs::create_dir_all(&storage_dir)
             .map_err(|e| SSHError::Storage(format!("Failed to create storage directory: {}", e)))?;
 
+        // 清理可能存在的临时文件（如果程序之前崩溃）
+        Self::cleanup_temp_files(&storage_dir);
+
         let storage_path = storage_dir.join("sessions.json");
         let key_path = storage_dir.join("encryption_key");
 
@@ -198,6 +201,20 @@ impl Storage {
             storage_path,
             encryption_key,
         })
+    }
+
+    /// 清理临时文件
+    fn cleanup_temp_files(storage_dir: &PathBuf) {
+        // 清理所有 .tmp 文件
+        if let Ok(entries) = fs::read_dir(storage_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("tmp") {
+                    tracing::info!("Cleaning up temp file: {:?}", path);
+                    let _ = fs::remove_file(&path);
+                }
+            }
+        }
     }
 
     /// 获取或创建加密密钥
@@ -359,7 +376,7 @@ impl Storage {
         sessions
     }
 
-    /// 保存会话列表
+    /// 保存会话列表（使用原子写入，确保数据完整性）
     pub fn save_sessions(&self, sessions: &[(String, SessionConfig)]) -> Result<()> {
         let saved_sessions: Result<Vec<SavedSession>> = sessions
             .iter()
@@ -376,8 +393,15 @@ impl Storage {
         let content = serde_json::to_string_pretty(&storage)
             .map_err(|e| SSHError::Storage(format!("Failed to serialize sessions: {}", e)))?;
 
-        fs::write(&self.storage_path, content)
-            .map_err(|e| SSHError::Storage(format!("Failed to write storage file: {}", e)))?;
+        // 使用原子写入：先写入临时文件，然后重命名
+        // 这样即使程序在写入过程中崩溃，也不会破坏原文件
+        let temp_path = self.storage_path.with_extension("tmp");
+        fs::write(&temp_path, content)
+            .map_err(|e| SSHError::Storage(format!("Failed to write temp file: {}", e)))?;
+
+        // 原子性地重命名临时文件为目标文件
+        fs::rename(&temp_path, &self.storage_path)
+            .map_err(|e| SSHError::Storage(format!("Failed to rename temp file: {}", e)))?;
 
         Ok(())
     }
@@ -518,6 +542,33 @@ impl Storage {
         Ok(())
     }
 
+    /// 检查存储文件是否存在
+    pub fn storage_path_exists(&self) -> bool {
+        self.storage_path.exists()
+    }
+
+    /// 获取存储路径
+    pub fn get_storage_path(&self) -> PathBuf {
+        self.storage_path.clone()
+    }
+
+    /// 写入内容到文件（原子写入）
+    pub fn write_to_file(&self, content: &str) -> Result<()> {
+        let temp_path = self.storage_path.with_extension("tmp");
+        fs::write(&temp_path, content)
+            .map_err(|e| SSHError::Storage(format!("Failed to write temp file: {}", e)))?;
+
+        fs::rename(&temp_path, &self.storage_path)
+            .map_err(|e| SSHError::Storage(format!("Failed to rename temp file: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// 加密单个会话用于存储（返回 SavedSession）
+    pub fn encrypt_session_for_storage(&self, id: String, session: SessionConfig) -> Result<SavedSession> {
+        self.encrypt_session(id, session)
+    }
+
     /// 删除单个会话配置（根据名称匹配）
     pub fn delete_session(&self, session_name: &str) -> Result<bool> {
         if !self.storage_path.exists() {
@@ -545,7 +596,45 @@ impl Storage {
         Ok(true)
     }
 
-    /// 保存应用配置
+    /// 直接删除会话（优化版：无需解密/加密）
+    pub fn delete_session_by_id(&self, session_id: &str) -> Result<bool> {
+        if !self.storage_path.exists() {
+            return Ok(false);
+        }
+
+        // 直接读取 JSON 文件，不解密
+        let content = fs::read_to_string(&self.storage_path)
+            .map_err(|e| SSHError::Storage(format!("Failed to read storage file: {}", e)))?;
+
+        let mut storage_data: SessionStorage = serde_json::from_str(&content)
+            .map_err(|e| SSHError::Storage(format!("Failed to parse storage file: {}", e)))?;
+
+        // 直接过滤掉要删除的会话（不解密）
+        let original_count = storage_data.sessions.len();
+        storage_data.sessions.retain(|s| s.id != session_id);
+
+        if storage_data.sessions.len() == original_count {
+            return Ok(false);
+        }
+
+        // 直接序列化并保存（无需加密）
+        let new_content = serde_json::to_string_pretty(&storage_data)
+            .map_err(|e| SSHError::Storage(format!("Failed to serialize sessions: {}", e)))?;
+
+        // 使用原子写入
+        let temp_path = self.storage_path.with_extension("tmp");
+        fs::write(&temp_path, new_content)
+            .map_err(|e| SSHError::Storage(format!("Failed to write temp file: {}", e)))?;
+
+        fs::rename(&temp_path, &self.storage_path)
+            .map_err(|e| SSHError::Storage(format!("Failed to rename temp file: {}", e)))?;
+
+        println!("Deleted session from storage: {}", session_id);
+
+        Ok(true)
+    }
+
+    /// 保存应用配置（使用原子写入，确保数据完整性）
     pub fn save_app_config(config: &TerminalConfig, app_handle: Option<&tauri::AppHandle>) -> Result<()> {
         let storage_dir = Self::get_storage_dir(app_handle)?;
 
@@ -563,8 +652,13 @@ impl Storage {
         let content = serde_json::to_string_pretty(&app_config)
             .map_err(|e| SSHError::Storage(format!("Failed to serialize app config: {}", e)))?;
 
-        fs::write(&config_path, content)
-            .map_err(|e| SSHError::Storage(format!("Failed to write app config: {}", e)))?;
+        // 使用原子写入：先写入临时文件，然后重命名
+        let temp_path = config_path.with_extension("tmp");
+        fs::write(&temp_path, content)
+            .map_err(|e| SSHError::Storage(format!("Failed to write temp file: {}", e)))?;
+
+        fs::rename(&temp_path, &config_path)
+            .map_err(|e| SSHError::Storage(format!("Failed to rename temp file: {}", e)))?;
 
         Ok(())
     }
@@ -616,7 +710,7 @@ impl Storage {
         }
     }
 
-    /// 保存 AI 配置
+    /// 保存 AI 配置（使用原子写入，确保数据完整性）
     pub fn save_ai_config(config: &AIConfig, app_handle: Option<&tauri::AppHandle>) -> Result<()> {
         let storage_dir = Self::get_storage_dir(app_handle)?;
 
@@ -668,8 +762,13 @@ impl Storage {
         let content = serde_json::to_string_pretty(&app_config)
             .map_err(|e| SSHError::Storage(format!("Failed to serialize AI config: {}", e)))?;
 
-        fs::write(&config_path, content)
-            .map_err(|e| SSHError::Storage(format!("Failed to write AI config: {}", e)))?;
+        // 使用原子写入：先写入临时文件，然后重命名
+        let temp_path = config_path.with_extension("tmp");
+        fs::write(&temp_path, content)
+            .map_err(|e| SSHError::Storage(format!("Failed to write temp file: {}", e)))?;
+
+        fs::rename(&temp_path, &config_path)
+            .map_err(|e| SSHError::Storage(format!("Failed to rename temp file: {}", e)))?;
 
         tracing::info!("AI config saved successfully");
         Ok(())
