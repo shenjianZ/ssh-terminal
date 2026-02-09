@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  Settings as SettingsIcon,
   Palette,
   Terminal,
   Keyboard,
@@ -73,39 +72,6 @@ export function Settings() {
 
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
-      {/* 页面标题 */}
-      <div className="mb-4 sm:mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2 sm:gap-3">
-              <SettingsIcon className="h-6 w-6 sm:h-8 sm:w-8" />
-              设置
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-1">
-              配置应用偏好和终端选项
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              try {
-                const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
-                await setConfig(defaultConfig);
-                playSound(SoundEffect.SUCCESS);
-              } catch (error) {
-                console.error('Failed to reset config:', error);
-                playSound(SoundEffect.ERROR);
-              }
-            }}
-            className="gap-2"
-          >
-            <RotateCcw className="h-4 w-4" />
-            重置所有
-          </Button>
-        </div>
-      </div>
-
       {/* 设置选项卡 */}
       <Tabs defaultValue="appearance" className="space-y-4 sm:space-y-6">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-6 gap-1 h-auto">

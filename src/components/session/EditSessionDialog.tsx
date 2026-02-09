@@ -18,14 +18,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Edit, Loader2 } from 'lucide-react';
-import type { SessionInfo, SessionConfig, AuthMethod } from '@/types/ssh';
+import type { SessionInfo, SessionConfig } from '@/types/ssh';
 import { toast } from 'sonner';
 
 interface EditSessionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   session: SessionInfo | null;
-  sessionConfig: SessionConfig | null;
+  sessionConfig?: SessionConfig | null;
   onUpdate: (config: Partial<SessionConfig>) => Promise<void>;
 }
 
