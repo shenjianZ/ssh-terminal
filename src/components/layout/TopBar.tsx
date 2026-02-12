@@ -5,6 +5,8 @@ import { Bell, Plus, FolderOpen, RotateCcw } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TerminalConfig } from "@/types/terminal";
 import { useTerminalConfigStore } from "@/store/terminalConfigStore";
+import { useKeybindingStore } from "@/store/keybindingStore";
+import { useAIStore } from "@/store/aiStore";
 import { playSound } from "@/lib/sounds";
 import { SoundEffect } from "@/lib/sounds";
 
@@ -26,6 +28,8 @@ export function TopBar() {
   const isSessionPage = location.pathname === '/sessions';
   const isSettingsPage = location.pathname === '/settings';
   const { setConfig } = useTerminalConfigStore();
+  const keybindingStore = useKeybindingStore();
+  const aiStore = useAIStore();
 
   const handleNewSession = () => {
     window.dispatchEvent(new CustomEvent('topbar-new-session'));
@@ -34,11 +38,21 @@ export function TopBar() {
   const handleResetAll = async () => {
     playSound(SoundEffect.BUTTON_CLICK);
     try {
+      // 1. 重置终端/录制配置
       const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
       await setConfig(defaultConfig);
+
+      // 2. 重置快捷键
+      await invoke('storage_keybindings_reset');
+      await keybindingStore.loadFromStorage();
+
+      // 3. 重置 AI 配置
+      const defaultAIConfig = await aiStore.getDefaultConfig();
+      await aiStore.saveConfig(defaultAIConfig);
+
       playSound(SoundEffect.SUCCESS);
     } catch (error) {
-      console.error('Failed to reset config:', error);
+      console.error('Failed to reset all configs:', error);
       playSound(SoundEffect.ERROR);
     }
   };

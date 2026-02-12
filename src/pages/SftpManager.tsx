@@ -104,6 +104,10 @@ export function SftpManager() {
       // 刷新本地文件列表
       setLocalRefreshKey(prev => prev + 1);
 
+      // 取消所有选中状态
+      setSelectedLocalFiles([]);
+      setSelectedRemoteFiles([]);
+
       // 等待一下让刷新生效
       await new Promise((resolve) => setTimeout(resolve, 300));
 

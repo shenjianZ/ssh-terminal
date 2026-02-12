@@ -286,6 +286,9 @@ export function FilePane({
     // 触发重新加载
     setInternalRefreshKey(prev => prev + 1);
 
+    // 清除选中状态
+    onSelectedFilesChange([]);
+
     // 仅对远程文件操作显示提示
     if (type === 'remote') {
       toast.success('已刷新');

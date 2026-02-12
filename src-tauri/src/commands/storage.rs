@@ -64,7 +64,7 @@ pub async fn storage_session_create(
     config: SessionConfig,
     app: AppHandle,
 ) -> Result<String> {
-    use crate::config::storage::{SessionStorage, SavedSession};
+    use crate::config::storage::SessionStorage;
 
     let storage = Storage::new(Some(&app))?;
 

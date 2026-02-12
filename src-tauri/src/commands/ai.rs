@@ -44,7 +44,8 @@ pub async fn ai_chat_stream(
     config: AIProviderConfig,
     messages: Vec<ChatMessage>,
 ) -> Result<String, String> {
-    // 创建 provider 实例
+    // 流式功能需要直接使用 provider 实例（不通过缓存）
+    // 因为 OpenAI 的流式实现需要保持对底层的引用
     let provider = match config.provider_type.as_str() {
         "ollama" => {
             // Ollama 暂不支持流式

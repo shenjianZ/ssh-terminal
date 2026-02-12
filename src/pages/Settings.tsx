@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ModeToggle } from '@/components/mode-toggle';
+import { useTheme } from '@/components/theme-provider';
 import { TerminalSettings } from '@/components/settings/TerminalSettings';
 import { KeybindingsSettings } from '@/components/keybindings/KeybindingsSettings';
 import { AISettings } from '@/components/settings/AISettings';
@@ -30,24 +31,7 @@ import type { TerminalConfig } from '@/types/terminal';
 export function Settings() {
   const { config, setConfig, loadConfig } = useTerminalConfigStore();
   const { loadConfig: loadAIConfig } = useAIStore();
-  const [settings, setSettings] = useState({
-    // 终端设置
-    terminalFont: 'monospace',
-    terminalFontSize: 14,
-    terminalScrollback: 1000,
-    cursorBlink: true,
-    copyOnSelect: false,
-
-    // 外观设置
-    theme: 'system',
-
-    // 通知设置
-    notifications: true,
-    soundEffects: soundManager.isEnabled(),
-
-    // 会话设置
-    autoSaveSessions: true,
-  });
+  const { setTheme } = useTheme();
 
   // 加载配置
   useEffect(() => {
@@ -55,9 +39,7 @@ export function Settings() {
     loadAIConfig();
   }, [loadConfig, loadAIConfig]);
 
-  const handleSwitchChange = (key: string, value: boolean) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-
+  const handleSwitchChange = async (key: string, value: boolean) => {
     // 如果是音效设置，更新音效管理器
     if (key === 'soundEffects') {
       soundManager.setEnabled(value);
@@ -67,6 +49,17 @@ export function Settings() {
     } else if (value) {
       // 其他开关打开时播放轻微点击音
       playSound(SoundEffect.TOGGLE_SWITCH);
+    }
+
+    // 持久化到后端
+    try {
+      if (key === 'notifications') {
+        await setConfig({ notificationsEnabled: value });
+      } else if (key === 'soundEffects') {
+        await setConfig({ soundEffectsEnabled: value });
+      }
+    } catch (error) {
+      console.error('Failed to save setting:', error);
     }
   };
 
@@ -112,10 +105,11 @@ export function Settings() {
               onClick={async () => {
                 try {
                   const defaultConfig = await invoke<TerminalConfig>('storage_config_get_default');
-                  await setConfig(defaultConfig);
+                  // 使用 setTheme 方法确保 appTheme 正确设置
+                  setTheme(defaultConfig.appTheme || 'system');
                   playSound(SoundEffect.SUCCESS);
                 } catch (error) {
-                  console.error('Failed to reset config:', error);
+                  console.error('Failed to reset appearance config:', error);
                   playSound(SoundEffect.ERROR);
                 }
               }}
@@ -148,7 +142,7 @@ export function Settings() {
               </div>
               <Switch
                 id="notifications"
-                checked={settings.notifications}
+                checked={config.notificationsEnabled}
                 onCheckedChange={(checked) => handleSwitchChange('notifications', checked)}
               />
             </div>
@@ -164,7 +158,7 @@ export function Settings() {
               </div>
               <Switch
                 id="sound"
-                checked={settings.soundEffects}
+                checked={config.soundEffectsEnabled}
                 onCheckedChange={(checked) => handleSwitchChange('soundEffects', checked)}
               />
             </div>
