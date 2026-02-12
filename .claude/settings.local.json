@@ -8,7 +8,8 @@
       "Bash(xargs:*)",
       "Bash(pnpm build:*)",
       "Skill(frontend-design:frontend-design)",
-      "Bash(pnpm list:*)"
+      "Bash(pnpm list:*)",
+      "Bash(tree:*)"
     ]
   }
 }
