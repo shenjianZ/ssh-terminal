@@ -31,13 +31,19 @@ async fn main() -> anyhow::Result<()> {
     // 解析命令行参数
     let args = CliArgs::parse();
 
-    // 初始化日志
+    // 初始化日志（使用北京时间）
+    let offset = time::UtcOffset::from_hms(8, 0, 0).unwrap();
+    let format = time::format_description::parse(
+        "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3]"
+    ).unwrap();
+    let timer = tracing_subscriber::fmt::time::OffsetTime::new(offset, format);
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| args.get_log_filter().into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_timer(timer))
         .init();
 
     // 打印启动信息

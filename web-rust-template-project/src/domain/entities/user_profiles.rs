@@ -60,9 +60,11 @@ impl ActiveModelBehavior for ActiveModel {
             this.created_at = Set(now);
             this.updated_at = Set(now);
             this.server_ver = Set(1);  // 初始版本
-            // 如果没有设置 ID，生成一个（使用 u64 确保为正数，因为 sea-orm 的 last_insert_rowid 不支持负数）
+            // 如果没有设置 ID，生成一个（确保为正数，因为 sea-orm 的 last_insert_rowid 不支持负数）
             if this.id.is_unchanged() {
-                this.id = Set(rand::random::<u64>() as i64);
+                let random_id = rand::random::<u64>();
+                let safe_id = (random_id % (i64::MAX as u64)) as i64;
+                this.id = Set(safe_id);
             }
         } else {
             this.updated_at = Set(now);

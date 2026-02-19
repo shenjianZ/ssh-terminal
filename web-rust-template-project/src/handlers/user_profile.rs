@@ -41,8 +41,11 @@ pub async fn update_profile_handler(
         Ok(Some(profile)) => profile,
         Ok(None) => {
             // 如果不存在，创建新的
+            // 确保使用正数 ID（避免 i64 溢出）
+            let random_id = rand::random::<u64>();
+            let safe_id = (random_id % (i64::MAX as u64)) as i64;
             let new_profile = user_profiles::Model {
-                id: rand::random::<u64>() as i64,  // 使用 u64 确保为正数
+                id: safe_id,
                 user_id: user_id.clone(),
                 username: request.username.clone(),
                 phone: request.phone.clone(),

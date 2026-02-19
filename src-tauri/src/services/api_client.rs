@@ -125,7 +125,24 @@ impl ApiClient {
             .send()
             .await?;
 
-        self.handle_response(response).await
+        match self.handle_response(response).await {
+            Ok(result) => Ok(result),
+            Err(e) if e.to_string().contains("Token refreshed, please retry") => {
+                // Token 刷新成功，重试请求
+                tracing::info!("Retrying request with new token: GET {}", path);
+                let new_token = self.get_token()
+                    .ok_or_else(|| anyhow::anyhow!("No access token available after refresh"))?;
+
+                let response = self.client
+                    .get(&url)
+                    .header(header::AUTHORIZATION, format!("Bearer {}", new_token))
+                    .send()
+                    .await?;
+
+                self.handle_response(response).await
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// 发送 POST 请求（带认证）
@@ -142,7 +159,26 @@ impl ApiClient {
             .send()
             .await?;
 
-        self.handle_response(response).await
+        match self.handle_response(response).await {
+            Ok(result) => Ok(result),
+            Err(e) if e.to_string().contains("Token refreshed, please retry") => {
+                // Token 刷新成功，重试请求
+                tracing::info!("Retrying request with new token: POST {}", path);
+                let new_token = self.get_token()
+                    .ok_or_else(|| anyhow::anyhow!("No access token available after refresh"))?;
+
+                let response = self.client
+                    .post(&url)
+                    .header(header::AUTHORIZATION, format!("Bearer {}", new_token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .json(body)
+                    .send()
+                    .await?;
+
+                self.handle_response(response).await
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// 发送 PUT 请求（带认证）
@@ -159,7 +195,26 @@ impl ApiClient {
             .send()
             .await?;
 
-        self.handle_response(response).await
+        match self.handle_response(response).await {
+            Ok(result) => Ok(result),
+            Err(e) if e.to_string().contains("Token refreshed, please retry") => {
+                // Token 刷新成功，重试请求
+                tracing::info!("Retrying request with new token: PUT {}", path);
+                let new_token = self.get_token()
+                    .ok_or_else(|| anyhow::anyhow!("No access token available after refresh"))?;
+
+                let response = self.client
+                    .put(&url)
+                    .header(header::AUTHORIZATION, format!("Bearer {}", new_token))
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .json(body)
+                    .send()
+                    .await?;
+
+                self.handle_response(response).await
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// 发送 DELETE 请求（带认证）
@@ -174,7 +229,24 @@ impl ApiClient {
             .send()
             .await?;
 
-        self.handle_response(response).await
+        match self.handle_response(response).await {
+            Ok(result) => Ok(result),
+            Err(e) if e.to_string().contains("Token refreshed, please retry") => {
+                // Token 刷新成功，重试请求
+                tracing::info!("Retrying request with new token: DELETE {}", path);
+                let new_token = self.get_token()
+                    .ok_or_else(|| anyhow::anyhow!("No access token available after refresh"))?;
+
+                let response = self.client
+                    .delete(&url)
+                    .header(header::AUTHORIZATION, format!("Bearer {}", new_token))
+                    .send()
+                    .await?;
+
+                self.handle_response(response).await
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// 发送 POST 请求（不带认证）

@@ -158,8 +158,11 @@ impl AuthService {
         self.save_refresh_token(&user_id, &refresh_token, self.auth_config.refresh_token_expiration_days as i64).await?;
 
         // 7. 创建初始用户资料
+        // 确保使用正数 ID（避免 i64 溢出）
+        let random_id = rand::random::<u64>();
+        let safe_id = (random_id % (i64::MAX as u64)) as i64;
         let user_profile = user_profiles::Model {
-            id: rand::random::<u64>() as i64,  // 使用 u64 确保为正数
+            id: safe_id,
             user_id: user_id.clone(),
             username: None,
             phone: None,
