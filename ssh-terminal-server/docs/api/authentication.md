@@ -1,6 +1,6 @@
 # 认证机制详解
 
-本文档详细说明 Web Rust Template 的 JWT 认证机制、安全特性和最佳实践。
+本文档详细说明 SSH Terminal Server 的 JWT 认证机制、安全特性和最佳实践。
 
 ## 目录
 

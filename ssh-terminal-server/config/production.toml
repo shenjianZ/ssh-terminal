@@ -10,7 +10,7 @@ host = "localhost"            # PostgreSQL 服务器地址
 port = 5432                   # PostgreSQL 端口（默认 5432）
 user = "postgres"              # PostgreSQL 用户名（请创建专用用户）
 password = "postgres"          # PostgreSQL 密码（请修改为强密码）
-database = "web_template"   # 数据库名称（不存在会自动创建）
+database = "ssh_terminal_server"   # 数据库名称（不存在会自动创建）
 max_connections = 20          # 最大连接数（生产环境建议 20-100）
 
 [auth]

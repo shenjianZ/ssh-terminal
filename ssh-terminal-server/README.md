@@ -1,6 +1,6 @@
-# Web Rust Template
+# SSH Terminal Server
 
-基于 Rust + Axum 0.7 的生产级 Web 服务器模板，采用 DDD 分层架构设计。
+基于 Rust + Axum 0.7 的生产级 SSH 终端服务器，采用 DDD 分层架构设计。
 
 ## 核心特性
 
@@ -18,15 +18,40 @@
 
 ## 快速开始
 
-### 1. 克隆并安装依赖
+### 方式一：使用 Docker Compose（推荐）
+
+使用 Docker Compose 可以快速部署完整的开发或生产环境：
+
+```bash
+# 1. 克隆项目
+git clone <repository>
+cd ssh-terminal-server
+
+# 2. 启动服务
+docker compose up -d
+
+# 3. 查看服务状态
+docker compose ps
+
+# 4. 查看日志
+docker compose logs -f app
+```
+
+服务将在 http://localhost:3000 启动，包含 PostgreSQL 数据库和 Redis 缓存。
+
+> 查看 [Docker Compose 部署指南](docs/deployment/docker-compose.md) 了解详细配置和管理命令
+
+### 方式二：本地开发
+
+#### 1. 克隆并安装依赖
 
 ```bash
 git clone <repository>
-cd web-rust-template
+cd ssh-terminal-server
 cargo build
 ```
 
-### 2. 配置项目
+#### 2. 配置项目
 
 **使用默认配置（SQLite，最简单）**：
 
@@ -42,10 +67,10 @@ cargo run
 **方式一：使用环境变量（推荐）**
 ```bash
 # 使用 MySQL
-DATABASE_TYPE=mysql DATABASE_HOST=localhost DATABASE_PORT=3306 DATABASE_USER=root DATABASE_PASSWORD=your-password DATABASE_DATABASE=web_template_dev cargo run
+DATABASE_TYPE=mysql DATABASE_HOST=localhost DATABASE_PORT=3306 DATABASE_USER=root DATABASE_PASSWORD=your-password DATABASE_DATABASE=ssh_terminal_server_dev cargo run
 
 # 或使用 PostgreSQL
-DATABASE_TYPE=postgresql DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_USER=postgres DATABASE_PASSWORD=your-password DATABASE_DATABASE=web_template_dev cargo run
+DATABASE_TYPE=postgresql DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_USER=postgres DATABASE_PASSWORD=your-password DATABASE_DATABASE=ssh_terminal_server_dev cargo run
 ```
 
 **方式二：创建本地配置文件**
@@ -188,6 +213,7 @@ src/
 - [API 接口文档](docs/api/api-overview.md) - 完整的 API 接口说明和示例
 - [快速开始指南](docs/development/getting-started.md) - 详细的安装和配置指南
 - [开发规范](docs/development/ddd-architecture.md) - DDD 架构和代码规范
+- [Docker Compose 部署](docs/deployment/docker-compose.md) - 使用 Docker 快速部署
 - [部署文档](docs/deployment/configuration.md) - 配置和部署指南
 
 ## 日志格式

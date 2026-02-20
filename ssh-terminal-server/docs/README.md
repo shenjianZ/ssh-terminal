@@ -1,6 +1,6 @@
-# Web Rust Template 文档中心
+# SSH Terminal Server 文档中心
 
-欢迎使用 Web Rust Template 文档！本模板项目提供了生产级的 Rust Web 服务器基础架构，采用 DDD 分层设计，包含完整的认证、数据库、缓存等功能。
+欢迎使用 SSH Terminal Server 文档！本项目提供了生产级的 SSH 终端服务器基础架构，采用 DDD 分层设计，包含完整的认证、数据库、缓存等功能。
 
 ## 快速导航
 

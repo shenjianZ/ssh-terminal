@@ -57,7 +57,7 @@
 
 2. **启动服务器**：
    ```bash
-   cd web-rust-template-project
+   cd ssh-terminal-server
    cargo run
    ```
 

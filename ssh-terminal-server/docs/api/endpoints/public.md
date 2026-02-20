@@ -78,8 +78,8 @@ GET /info
 
 ```json
 {
-  "name": "web-rust-template",
-  "version": "0.1.0",
+  "name": "ssh-terminal-server",
+  "version": "1.0",
   "status": "running",
   "timestamp": 1704112800
 }

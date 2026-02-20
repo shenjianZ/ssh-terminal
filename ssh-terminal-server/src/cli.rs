@@ -24,10 +24,10 @@ impl Environment {
 
 /// 命令行参数
 #[derive(Parser, Debug)]
-#[command(name = "web-rust-template")]
-#[command(about = "Web Server Template", long_about = None)]
-#[command(author = "Your Name <your.email@example.com>")]
-#[command(version = "0.1.0")]
+#[command(name = "ssh-terminal-server")]
+#[command(about = "SSH Terminal Server", long_about = None)]
+#[command(author = "shenjainZ <shenjianZLT@gmail.com>")]
+#[command(version = "1.0")]
 #[command(propagate_version = true)]
 pub struct CliArgs {
     /// 指定配置文件路径
@@ -109,9 +109,9 @@ impl CliArgs {
     pub fn get_log_filter(&self) -> String {
         let level = self.get_log_level();
         match level {
-            "trace" => "web_rust_template=trace,tower_http=trace,axum=trace,sqlx=debug".into(),
-            "debug" => "web_rust_template=debug,tower_http=debug,axum=debug,sqlx=debug".into(),
-            _ => "web_rust_template=info,tower_http=info,axum=info".into(),
+            "trace" => "ssh_terminal_server=trace,tower_http=trace,axum=trace,sqlx=debug".into(),
+            "debug" => "ssh_terminal_server=debug,tower_http=debug,axum=debug,sqlx=debug".into(),
+            _ => "ssh_terminal_server=info,tower_http=info,axum=info".into(),
         }
     }
 
@@ -144,7 +144,10 @@ impl CliArgs {
             if config.exists() {
                 return Some(config);
             }
-            eprintln!("⚠ 警告：环境变量 CONFIG 指定的配置文件不存在: {}", config_path);
+            eprintln!(
+                "⚠ 警告：环境变量 CONFIG 指定的配置文件不存在: {}",
+                config_path
+            );
             eprintln!("  将仅使用环境变量运行");
             return None;
         }
@@ -199,7 +202,7 @@ impl CliArgs {
     pub fn print_startup_info(&self) {
         let separator = "=".repeat(60);
         println!("{}", separator);
-        println!("Web Rust Template Server v0.1.0");
+        println!("SSH Terminal Server v1.0");
         println!("Environment: {}", self.env.as_str());
 
         // 打印实际解析的配置路径（而非 CLI 参数）

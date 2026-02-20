@@ -33,8 +33,8 @@ pub struct ServerInfoResult {
 impl ServerInfoResult {
     pub fn new() -> Self {
         Self {
-            name: "web-rust-template".to_string(),
-            version: "0.1.0".to_string(),
+            name: "ssh-terminal-server".to_string(),
+            version: "1.0".to_string(),
             status: "running".to_string(),
             timestamp: chrono::Utc::now().timestamp(),
         }

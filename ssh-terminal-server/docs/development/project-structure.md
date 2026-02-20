@@ -1,6 +1,6 @@
 # 项目结构详解
 
-本文档详细说明 Web Rust Template 的项目结构、DDD 分层架构和各层职责。
+本文档详细说明 SSH Terminal Server 的项目结构、DDD 分层架构和各层职责。
 
 ## 目录
 
@@ -53,7 +53,7 @@
 ## 项目目录结构
 
 ```
-web-rust-template/
+ssh-terminal-server/
 ├── src/                          # 源代码目录
 │   ├── main.rs                   # 应用入口
 │   ├── cli.rs                   # 命令行参数解析

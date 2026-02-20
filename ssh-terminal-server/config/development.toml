@@ -12,7 +12,7 @@ database_type = "sqlite"
 # port = 3306
 # user = "root"
 # password = "root"
-# database = "web_template"
+# database = "ssh_terminal_server"
 
 # SQLite 配置（当 database_type = "sqlite" 时使用）
 path = "data/app.db"

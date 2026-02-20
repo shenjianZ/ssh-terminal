@@ -1,6 +1,6 @@
 # 快速开始指南
 
-本文档将指导你完成 Web Rust Template 项目的安装、配置和运行。
+本文档将指导你完成 SSH Terminal Server 项目的安装、配置和运行。
 
 ## 目录
 
@@ -64,7 +64,7 @@ redis-cli --version
 
 ```bash
 git clone <repository-url>
-cd web-rust-template
+cd ssh-terminal-server
 ```
 
 ### 2. 安装依赖
@@ -106,7 +106,7 @@ host = "localhost"
 port = 3306
 user = "root"
 password = "your-password"
-database = "web_template_dev"
+database = "ssh_terminal_server_dev"
 
 # 或 PostgreSQL 配置
 # type = "postgresql"
@@ -114,7 +114,7 @@ database = "web_template_dev"
 # port = 5432
 # user = "postgres"
 # password = "your-password"
-# database = "web_template_dev"
+# database = "ssh_terminal_server_dev"
 ```
 
 **步骤 2**：运行项目
@@ -132,7 +132,7 @@ DATABASE_HOST=localhost \
 DATABASE_PORT=5432 \
 DATABASE_USER=postgres \
 DATABASE_PASSWORD=password \
-DATABASE_DATABASE=web_template_dev \
+DATABASE_DATABASE=ssh_terminal_server_dev \
 cargo run
 ```
 
@@ -173,7 +173,7 @@ host = "localhost"
 port = 3306
 user = "root"
 password = "your-password"
-database = "web_template_dev"
+database = "ssh_terminal_server_dev"
 ```
 
 **选项 2**：使用环境变量
@@ -184,7 +184,7 @@ DATABASE_HOST=localhost \
 DATABASE_PORT=3306 \
 DATABASE_USER=root \
 DATABASE_PASSWORD=your-password \
-DATABASE_DATABASE=web_template_dev \
+DATABASE_DATABASE=ssh_terminal_server_dev \
 cargo run
 ```
 
@@ -207,7 +207,7 @@ host = "localhost"
 port = 5432
 user = "postgres"
 password = "your-password"
-database = "web_template_dev"
+database = "ssh_terminal_server_dev"
 ```
 
 或使用环境变量（格式与 MySQL 相同）。
@@ -281,7 +281,7 @@ cargo run -- -e production
 nohup cargo run -- -e production > app.log 2>&1 &
 
 # 使用 screen
-screen -S web-rust-template
+screen -S ssh-terminal-server
 cargo run -- -e production
 # 按 Ctrl+A 然后 D 分离会话
 ```
@@ -312,8 +312,8 @@ curl http://localhost:3000/info
 预期响应：
 ```json
 {
-  "name": "web-rust-template",
-  "version": "0.1.0",
+  "name": "ssh-terminal-server",
+  "version": "1.0",
   "status": "running",
   "timestamp": 1704112800
 }
@@ -442,7 +442,7 @@ lsof -ti:3000 | xargs kill -9
 
 ```bash
 # Linux/macOS
-chmod +x target/debug/web-rust-template
+chmod +x target/debug/ssh-terminal-server
 
 # 或使用 sudo 运行（不推荐生产环境）
 sudo cargo run

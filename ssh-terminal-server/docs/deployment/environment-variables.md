@@ -160,7 +160,7 @@ MySQL 数据库名称。
 
 **示例**：
 ```bash
-DATABASE_DATABASE=web_template
+DATABASE_DATABASE=ssh_terminal_server
 ```
 
 ### PostgreSQL 配置
@@ -420,7 +420,7 @@ DATABASE_HOST=localhost \
 DATABASE_PORT=3306 \
 DATABASE_USER=root \
 DATABASE_PASSWORD=root \
-DATABASE_DATABASE=web_template_dev \
+DATABASE_DATABASE=ssh_terminal_server_dev \
 cargo run
 ```
 
@@ -448,7 +448,7 @@ DATABASE_HOST=mysql.production.example.com \
 DATABASE_PORT=3306 \
 DATABASE_USER=webapp \
 DATABASE_PASSWORD=strong-password-here \
-DATABASE_DATABASE=web_template_prod \
+DATABASE_DATABASE=ssh_terminal_server_prod \
 DATABASE_MAX_CONNECTIONS=100 \
 AUTH_JWT_SECRET=Kx7Yn2Zp9qR8wF4tL6mN3vB5xC8zD1sE9aH2jK7 \
 REDIS_HOST=redis.production.example.com \
@@ -466,7 +466,7 @@ version: '3.8'
 
 services:
   web:
-    image: web-rust-template:latest
+    image: ssh-terminal-server:latest
     ports:
       - "3000:3000"
     environment:
@@ -477,7 +477,7 @@ services:
       - DATABASE_PORT=5432
       - DATABASE_USER=webapp
       - DATABASE_PASSWORD=password
-      - DATABASE_DATABASE=web_template
+      - DATABASE_DATABASE=ssh_terminal_server
       - DATABASE_MAX_CONNECTIONS=10
       - AUTH_JWT_SECRET=${JWT_SECRET}
       - AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES=15
@@ -494,7 +494,7 @@ services:
     environment:
       - POSTGRES_USER=webapp
       - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=web_template
+      - POSTGRES_DB=ssh_terminal_server
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
