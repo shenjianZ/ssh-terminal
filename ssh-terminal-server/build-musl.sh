@@ -159,16 +159,24 @@ EOF
     echo ""
 
     # 临时复制二进制文件到项目根目录
+    TEMP_BINARY="${PROJECT_DIR}/${BINARY_NAME}"
     echo "准备镜像构建..."
-    cp "${OUTPUT_DIR}/${BINARY_NAME}" "${PROJECT_DIR}/${BINARY_NAME}"
+    echo "  复制二进制文件: ${OUTPUT_DIR}/${BINARY_NAME} -> ${TEMP_BINARY}"
+    cp "${OUTPUT_DIR}/${BINARY_NAME}" "${TEMP_BINARY}"
+
+    # 确保临时文件被清理（即使构建失败）
+    trap "rm -f ${TEMP_BINARY}" EXIT
 
     # 构建镜像
     IMAGE_TAG="ssh-terminal-server:latest"
     echo "构建 Docker 镜像: ${IMAGE_TAG}"
+    echo "  Dockerfile: ${DOCKERFILE_PATH}"
+    echo "  构建上下文: ${PROJECT_DIR}"
     docker build -t "${IMAGE_TAG}" -f "${DOCKERFILE_PATH}" "${PROJECT_DIR}"
 
-    # 清理临时文件
-    rm "${PROJECT_DIR}/${BINARY_NAME}"
+    # 清理临时文件（trap 也会处理，但这里显式清理更清晰）
+    rm -f "${TEMP_BINARY}"
+    trap - EXIT  # 清除 trap
 
     echo ""
     echo "========================================="
