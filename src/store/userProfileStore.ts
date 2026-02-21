@@ -10,6 +10,7 @@ interface UserProfileState {
   loadProfile: () => Promise<void>;
   updateProfile: (req: UpdateProfileRequest) => Promise<UserProfile>;
   syncProfile: () => Promise<UserProfile>;
+  clearProfile: () => void; // 清除用户资料
   clearError: () => void;
 }
 
@@ -60,4 +61,6 @@ export const useUserProfileStore = create<UserProfileState>((set) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  clearProfile: () => set({ profile: null }),
 }));

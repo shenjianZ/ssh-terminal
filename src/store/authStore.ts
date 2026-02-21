@@ -41,7 +41,7 @@ const createUserWithServerUrl = async (res: AuthResponse): Promise<User> => {
   };
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   isAuthenticated: false,
   currentUser: null,
   isLoading: false,
@@ -53,6 +53,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await invoke<AuthResponse>('auth_login', { req });
       const user: User = await createUserWithServerUrl(res);
       set({ isAuthenticated: true, currentUser: user, isLoading: false });
+
+      // 登录成功后自动同步服务器数据
+      try {
+        const { useSyncStore } = await import('./syncStore');
+        const { useSessionStore } = await import('./sessionStore');
+        const syncStore = useSyncStore.getState();
+        const sessionStore = useSessionStore.getState();
+        const authStore = get();
+
+        await syncStore.syncNow();
+        await sessionStore.reloadSessions();
+        await authStore.getCurrentUser();
+        console.log('[authStore] Login sync completed');
+      } catch (syncError) {
+        console.error('[authStore] Failed to sync after login:', syncError);
+        // 同步失败不影响登录成功
+      }
     } catch (error) {
       const errorString = error as string;
       // 尝试从 API 错误响应中提取 message 字段
@@ -81,6 +98,20 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await invoke<AuthResponse>('auth_register', { req });
       const user: User = await createUserWithServerUrl(res);
       set({ isAuthenticated: true, currentUser: user, isLoading: false });
+
+      // 注册成功后只加载本地用户资料，不同步服务器
+      try {
+        const { useUserProfileStore } = await import('./userProfileStore');
+        const userProfileStore = useUserProfileStore.getState();
+        const authStore = get();
+
+        await userProfileStore.loadProfile();
+        await authStore.getCurrentUser();
+        console.log('[authStore] Register user profile loaded');
+      } catch (profileError) {
+        console.error('[authStore] Failed to load profile after register:', profileError);
+        // 加载用户资料失败不影响注册成功
+      }
     } catch (error) {
       const errorString = error as string;
       // 尝试从 API 错误响应中提取 message 字段
@@ -108,6 +139,21 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await invoke('auth_logout');
       set({ isAuthenticated: false, currentUser: null, isLoading: false });
+
+      // 清除用户资料和会话数据
+      try {
+        const { useSessionStore } = await import('./sessionStore');
+        const { useUserProfileStore } = await import('./userProfileStore');
+        const sessionStore = useSessionStore.getState();
+        const userProfileStore = useUserProfileStore.getState();
+
+        sessionStore.clearSessions();
+        userProfileStore.clearProfile();
+        console.log('[authStore] User data cleared after logout');
+      } catch (clearError) {
+        console.error('[authStore] Failed to clear data after logout:', clearError);
+        // 清除失败不影响登出成功
+      }
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -132,6 +178,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       const res = await invoke<AuthResponse>('auth_auto_login');
       const user: User = await createUserWithServerUrl(res);
       set({ isAuthenticated: true, currentUser: user, isLoading: false });
+
+      // 自动登录成功后只从本地 SQLite 加载会话和用户资料，不同步服务器
+      try {
+        const { useSessionStore } = await import('./sessionStore');
+        const { useUserProfileStore } = await import('./userProfileStore');
+        const sessionStore = useSessionStore.getState();
+        const userProfileStore = useUserProfileStore.getState();
+        const authStore = get();
+
+        await sessionStore.reloadSessions();
+        await userProfileStore.loadProfile();
+        await authStore.getCurrentUser();
+        console.log('[authStore] Auto login local data loaded');
+      } catch (loadError) {
+        console.error('[authStore] Failed to load local data after auto login:', loadError);
+        // 加载本地数据失败不影响自动登录成功
+      }
     } catch (error) {
       // 不设置 error 状态，因为这是静默自动登录，失败应该不显示错误
       set({ isLoading: false });

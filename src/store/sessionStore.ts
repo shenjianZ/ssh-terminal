@@ -21,6 +21,7 @@ interface SessionStore {
   loadSessionsFromStorage: () => Promise<void>;
   reloadSessions: () => Promise<void>; // 强制重新加载会话和配置缓存
   saveSessions: () => Promise<void>;
+  clearSessions: () => void; // 清除所有会话数据
 
   // 查询
   getSession: (id: string) => SessionInfo | undefined;
@@ -469,6 +470,11 @@ export const useSessionStore = create<SessionStore>()(
 
       getSessionConfig: (id: string) => {
         return get().sessionConfigs.get(id);
+      },
+
+      clearSessions: () => {
+        set({ sessions: [], sessionConfigs: new Map(), isStorageLoaded: false });
+        console.log('[sessionStore] Sessions cleared');
       },
     }),
     {
