@@ -111,8 +111,8 @@ impl SshSessionRepository {
         let now = chrono::Utc::now().timestamp();
 
         conn.execute(
-            "UPDATE ssh_sessions SET is_deleted = 1, is_dirty = 1, deleted_at = ?1 WHERE id = ?2",
-            (now, id),
+            "UPDATE ssh_sessions SET is_deleted = 1, is_dirty = 1, deleted_at = ?1, updated_at = ?2 WHERE id = ?3",
+            (now, now, id),
         )?;
 
         Ok(())

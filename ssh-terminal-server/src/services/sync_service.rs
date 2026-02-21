@@ -4,6 +4,7 @@ use crate::domain::dto::sync::*;
 use crate::domain::vo::sync::*;
 use crate::repositories::ssh_session_repository::SshSessionRepository;
 use crate::repositories::user_profile_repository::UserProfileRepository;
+use crate::repositories::user_repository::UserRepository;
 use chrono::Utc;
 use uuid;
 
@@ -18,6 +19,18 @@ impl SyncService {
 
     /// 统一同步 - 先 Push，后 Pull
     pub async fn sync(&self, request: SyncRequest, user_id: &str) -> Result<SyncResponse> {
+        // 检查用户是否已被软删除
+        let user_repo = UserRepository::new(self.db.clone());
+        match user_repo.find_by_id_raw(user_id).await? {
+            Some(user) if user.deleted_at.is_some() => {
+                return Err(anyhow::anyhow!("用户已被删除，无法同步"));
+            }
+            None => {
+                return Err(anyhow::anyhow!("用户不存在"));
+            }
+            _ => {}
+        }
+
         let ssh_repo = SshSessionRepository::new(self.db.clone());
         let profile_repo = UserProfileRepository::new(self.db.clone());
 
@@ -25,63 +38,102 @@ impl SyncService {
         let server_time = Utc::now().timestamp();
         let last_sync_at = server_time; // 所有记录使用统一时间
 
+        // === 冲突检测 ===
+        let mut conflicts = Vec::new();
+        let mut session_conflict_ids = Vec::new();
+        let mut profile_has_conflict = false;
+
+        // 获取服务器现有数据
+        let server_sessions = ssh_repo.find_by_user_id(user_id).await?;
+        let server_profile = profile_repo.find_by_user_id(user_id).await?;
+
+        // 检查 SSH 会话冲突
+        for session_item in &request.ssh_sessions {
+            if let Some(existing) = server_sessions.iter().find(|s| s.id == session_item.id) {
+                if let Some(req_last_sync) = request.last_sync_at {
+                    if existing.updated_at > req_last_sync {
+                        // 服务器有更新，客户端也推送了更新 → 冲突
+                        conflicts.push(self.create_session_conflict_info(session_item, existing));
+                        session_conflict_ids.push(session_item.id.clone());
+                    }
+                }
+            }
+        }
+
+        // 检查用户资料冲突
+        if request.user_profile.is_some() {
+            if let Some(existing_profile) = &server_profile {
+                if let Some(req_last_sync) = request.last_sync_at {
+                    if existing_profile.updated_at > req_last_sync {
+                        // 服务器有更新，客户端也推送了更新 → 冲突
+                        conflicts.push(self.create_profile_conflict_info(existing_profile));
+                        profile_has_conflict = true;
+                    }
+                }
+            }
+        }
+
         // === 第一阶段：Push - 处理客户端推送 ===
         let mut updated_session_ids = Vec::new();
         let mut deleted_session_ids = Vec::new();
         let mut server_versions = std::collections::HashMap::new();
-        let mut conflicts = Vec::new();
 
-        // 1. 处理用户资料更新
+        // 1. 处理用户资料更新（跳过有冲突的）
         let profile_updated = if let Some(profile_req) = request.user_profile {
-            match profile_repo.find_by_user_id(user_id).await {
-                Ok(Some(existing)) => {
-                    // 更新用户资料：保持原有的 created_at，只更新 updated_at
-                    let updated_profile = crate::domain::entities::user_profiles::Model {
-                        id: 0, // 将在 update 中使用
-                        user_id: user_id.to_string(),
-                        username: profile_req.username,
-                        phone: profile_req.phone,
-                        qq: profile_req.qq,
-                        wechat: profile_req.wechat,
-                        bio: profile_req.bio,
-                        avatar_data: profile_req.avatar_data,
-                        avatar_mime_type: profile_req.avatar_mime_type,
-                        server_ver: 1,
-                        created_at: existing.created_at, // 保持原有创建时间
-                        updated_at: last_sync_at, // 使用统一的更新时间
-                        deleted_at: None,
-                    };
+            if profile_has_conflict {
+                tracing::warn!("Skipping profile update due to conflict");
+                false
+            } else {
+                match profile_repo.find_by_user_id(user_id).await {
+                    Ok(Some(existing)) => {
+                        // 更新用户资料：只更新非 null 的字段，保留 null 字段的现有值
+                        let updated_profile = crate::domain::entities::user_profiles::Model {
+                            id: 0, // 将在 update 中使用
+                            user_id: user_id.to_string(),
+                            username: profile_req.username.or(existing.username),
+                            phone: profile_req.phone.or(existing.phone),
+                            qq: profile_req.qq.or(existing.qq),
+                            wechat: profile_req.wechat.or(existing.wechat),
+                            bio: profile_req.bio.or(existing.bio),
+                            avatar_data: profile_req.avatar_data.or(existing.avatar_data),
+                            avatar_mime_type: profile_req.avatar_mime_type.or(existing.avatar_mime_type),
+                            server_ver: 1,
+                            created_at: existing.created_at, // 保持原有创建时间
+                            updated_at: last_sync_at, // 使用统一的更新时间
+                            deleted_at: None,
+                        };
 
-                    let _ = profile_repo.update(user_id, updated_profile).await;
-                    true // 已更新
-                }
-                Ok(None) => {
-                    // 创建新用户资料
-                    // 确保使用正数 ID（避免 i64 溢出）
-                    let random_id = rand::random::<u64>();
-                    let safe_id = (random_id % (i64::MAX as u64)) as i64;
-                    let new_profile = crate::domain::entities::user_profiles::Model {
-                        id: safe_id,
-                        user_id: user_id.to_string(),
-                        username: profile_req.username,
-                        phone: profile_req.phone,
-                        qq: profile_req.qq,
-                        wechat: profile_req.wechat,
-                        bio: profile_req.bio,
-                        avatar_data: profile_req.avatar_data,
-                        avatar_mime_type: profile_req.avatar_mime_type,
-                        server_ver: 1,
-                        created_at: last_sync_at,
-                        updated_at: last_sync_at,
-                        deleted_at: None,
-                    };
+                        let _ = profile_repo.update(user_id, updated_profile).await;
+                        true // 已更新
+                    }
+                    Ok(None) => {
+                        // 创建新用户资料
+                        // 确保使用正数 ID（避免 i64 溢出）
+                        let random_id = rand::random::<u64>();
+                        let safe_id = (random_id % (i64::MAX as u64)) as i64;
+                        let new_profile = crate::domain::entities::user_profiles::Model {
+                            id: safe_id,
+                            user_id: user_id.to_string(),
+                            username: profile_req.username,
+                            phone: profile_req.phone,
+                            qq: profile_req.qq,
+                            wechat: profile_req.wechat,
+                            bio: profile_req.bio,
+                            avatar_data: profile_req.avatar_data,
+                            avatar_mime_type: profile_req.avatar_mime_type,
+                            server_ver: 1,
+                            created_at: last_sync_at,
+                            updated_at: last_sync_at,
+                            deleted_at: None,
+                        };
 
-                    let _ = profile_repo.create(new_profile).await;
-                    true // 已创建
-                }
-                Err(e) => {
-                    tracing::error!("Failed to update user profile: {}", e);
-                    false // 未更新
+                        let _ = profile_repo.create(new_profile).await;
+                        true // 已创建
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to update user profile: {}", e);
+                        false // 未更新
+                    }
                 }
             }
         } else {
@@ -90,6 +142,12 @@ impl SyncService {
 
         // 2. 处理 SSH 会话更新（使用统一的 last_sync_at）
         for session_item in &request.ssh_sessions {
+            // 跳过有冲突的会话
+            if session_conflict_ids.contains(&session_item.id) {
+                tracing::warn!("Skipping session update due to conflict: {}", session_item.id);
+                continue;
+            }
+
             match ssh_repo.find_by_id(&session_item.id).await {
                 Ok(Some(existing)) => {
                     // 检查版本冲突
@@ -171,9 +229,9 @@ impl SyncService {
             }
         }
 
-        // 3. 处理删除的会话
+        // 3. 处理删除的会话（使用统一的服务器时间戳）
         for session_id in &request.deleted_session_ids {
-            match ssh_repo.soft_delete(session_id).await {
+            match ssh_repo.soft_delete_with_time(session_id, last_sync_at).await {
                 Ok(_) => {
                     deleted_session_ids.push(session_id.clone());
                 }
@@ -184,39 +242,95 @@ impl SyncService {
         }
 
         // === 第二阶段：Pull - 拉取最新的服务器数据 ===
-        // 判断是否需要返回 SSH 会话列表：
-        // 1. 首次同步（last_sync_at 为 None）
-        // 2. 请求中有 SSH 会话的更新或删除
-        let should_pull_sessions = request.last_sync_at.is_none()
-            || !request.ssh_sessions.is_empty()
-            || !request.deleted_session_ids.is_empty();
-
-        let ssh_sessions_vo = if should_pull_sessions {
-            // 返回用户的所有会话列表
-            let sessions = ssh_repo.find_by_user_id(user_id).await?;
+        // 增量拉取 SSH 会话：
+        // - 如果有 last_sync_at，只返回该时间之后更新的会话
+        // - 首次同步（last_sync_at 为 None）返回所有会话
+        let ssh_sessions_vo = if let Some(last_sync) = request.last_sync_at {
+            // 增量拉取：只返回 last_sync 之后更新的会话
+            let sessions = ssh_repo.find_by_user_id_updated_after(user_id, last_sync).await?;
+            
+            // 对于返回的会话，更新 updated_at 为 last_sync_at
+            for session in &sessions {
+                if session.updated_at > last_sync {
+                    let mut updated = session.clone();
+                    updated.updated_at = last_sync_at;
+                    let _ = ssh_repo.update(&session.id, updated).await;
+                }
+            }
+            
             sessions
                 .into_iter()
                 .map(|s| self.session_to_vo(s))
                 .collect()
         } else {
-            // 不需要拉取，返回空列表
-            vec![]
+            // 首次同步：返回所有会话
+            let sessions = ssh_repo.find_by_user_id(user_id).await?;
+            sessions
+                .into_iter()
+                .map(|s| self.session_to_vo(s))
+                .collect()
         };
 
-        // 判断是否需要返回用户资料：
-        // 1. 首次同步（last_sync_at 为 None）
-        // 2. 请求中更新了 user_profile
-        let should_pull_profile = request.last_sync_at.is_none() || profile_updated;
-
-        let user_profile_vo = if should_pull_profile {
-            // 返回用户的最新资料
-            match profile_repo.find_by_user_id(user_id).await {
-                Ok(Some(profile)) => Some(self.profile_to_vo(profile)),
+        // 增量拉取用户资料：
+        // - 如果有 last_sync_at，只返回该时间之后更新的资料
+        // - 首次同步（last_sync_at 为 None）返回所有资料
+        let user_profile_vo = if let Some(last_sync) = request.last_sync_at {
+            // 增量拉取：只返回 last_sync 之后更新的资料
+            match profile_repo.find_by_user_id_updated_after(user_id, last_sync).await {
+                Ok(Some(profile)) => {
+                    // 更新 updated_at 为 last_sync_at
+                    let mut updated = profile.clone();
+                    updated.updated_at = last_sync_at;
+                    let _ = profile_repo.update(user_id, updated.clone()).await;
+                    
+                    // 获取用户 email
+                    let email = match user_repo.get_email_by_id(user_id).await {
+                        Ok(Some(e)) => e,
+                        _ => String::new(),
+                    };
+                    Some(self.profile_to_vo(updated, email))
+                },
                 _ => None,
             }
         } else {
-            // 不需要拉取，返回 None
+            // 首次同步：返回所有资料
+            match profile_repo.find_by_user_id(user_id).await {
+                Ok(Some(profile)) => {
+                    // 更新 updated_at 为 last_sync_at
+                    let mut updated = profile.clone();
+                    updated.updated_at = last_sync_at;
+                    let _ = profile_repo.update(user_id, updated.clone()).await;
+                    
+                    // 获取用户 email
+                    let email = match user_repo.get_email_by_id(user_id).await {
+                        Ok(Some(e)) => e,
+                        _ => String::new(),
+                    };
+                    Some(self.profile_to_vo(updated, email))
+                },
+                _ => None,
+            }
+        };
+
+        // === 生成冲突消息 ===
+        let message = if conflicts.is_empty() {
             None
+        } else {
+            let mut messages = Vec::new();
+            
+            if conflicts.iter().any(|c| c.entity_type == "ssh_session") {
+                messages.push("部分 SSH 会话已保留服务器版本");
+            }
+            
+            if conflicts.iter().any(|c| c.entity_type == "user_profile") {
+                messages.push("用户资料已保留服务器版本");
+            }
+            
+            if !messages.is_empty() {
+                Some(messages.join("，"))
+            } else {
+                None
+            }
         };
 
         // === 返回统一响应 ===
@@ -229,6 +343,7 @@ impl SyncService {
             user_profile: user_profile_vo,
             ssh_sessions: ssh_sessions_vo,
             conflicts,
+            message,
         })
     }
 
@@ -305,6 +420,46 @@ impl SyncService {
         }
     }
 
+    /// 创建 SSH 会话冲突信息（用于时间戳冲突检测）
+    fn create_session_conflict_info(
+        &self,
+        client_item: &SshSessionPushItem,
+        server_item: &crate::domain::entities::ssh_sessions::Model,
+    ) -> ConflictInfo {
+        ConflictInfo {
+            id: client_item.id.clone(),
+            entity_type: "ssh_session".to_string(),
+            client_ver: client_item.client_ver,
+            server_ver: server_item.server_ver,
+            client_data: Some(serde_json::json!(client_item)),
+            server_data: Some(serde_json::json!({
+                "id": server_item.id,
+                "name": server_item.name,
+                "serverVer": server_item.server_ver,
+            })),
+            message: format!("会话 '{}' 有冲突", client_item.name),
+        }
+    }
+
+    /// 创建用户资料冲突信息
+    fn create_profile_conflict_info(
+        &self,
+        server_item: &crate::domain::entities::user_profiles::Model,
+    ) -> ConflictInfo {
+        ConflictInfo {
+            id: server_item.user_id.clone(),
+            entity_type: "user_profile".to_string(),
+            client_ver: 0,
+            server_ver: server_item.server_ver,
+            client_data: None,
+            server_data: Some(serde_json::json!({
+                "username": server_item.username,
+                "serverVer": server_item.server_ver,
+            })),
+            message: "用户资料有冲突".to_string(),
+        }
+    }
+
     /// 将 SSH Session Model 转换为 VO
     fn session_to_vo(&self, session: crate::domain::entities::ssh_sessions::Model) -> crate::domain::vo::ssh::SshSessionVO {
         crate::domain::vo::ssh::SshSessionVO {
@@ -331,10 +486,11 @@ impl SyncService {
     }
 
     /// 将 User Profile Model 转换为 VO
-    fn profile_to_vo(&self, profile: crate::domain::entities::user_profiles::Model) -> crate::domain::vo::user::UserProfileVO {
+    fn profile_to_vo(&self, profile: crate::domain::entities::user_profiles::Model, email: String) -> crate::domain::vo::user::UserProfileVO {
         crate::domain::vo::user::UserProfileVO {
             id: profile.id,
             user_id: profile.user_id,
+            email,
             username: profile.username,
             phone: profile.phone,
             qq: profile.qq,

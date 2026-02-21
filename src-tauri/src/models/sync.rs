@@ -64,6 +64,8 @@ pub struct SyncReport {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated_session_ids: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }
 
 /// 同步状态
@@ -130,6 +132,8 @@ pub struct ServerSyncResponse {
     pub ssh_sessions: Vec<crate::models::ServerSshSession>,
     /// 冲突信息
     pub conflicts: Vec<ServerConflictInfo>,
+    /// 消息
+    pub message: Option<String>,
 }
 
 /// 服务器冲突信息

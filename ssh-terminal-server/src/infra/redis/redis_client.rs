@@ -319,4 +319,106 @@ impl RedisClient {
             || err_msg.contains("connection closed")
             || err_msg.contains("Connection reset")
     }
+
+    // ==================== Redis Set 操作 ====================
+
+    /// 向 Set 中添加一个或多个成员
+    pub async fn sadd(&self, k: &str, v: &str) -> redis::RedisResult<()> {
+        let mut conn = self.conn.lock().await;
+        let result: redis::RedisResult<()> = conn.sadd(k, v).await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if self.is_connection_error(&e) {
+                    drop(conn);
+                    self.reconnect().await?;
+                    let mut conn = self.conn.lock().await;
+                    conn.sadd(k, v).await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// 从 Set 中移除一个或多个成员
+    pub async fn srem(&self, k: &str, v: &str) -> redis::RedisResult<()> {
+        let mut conn = self.conn.lock().await;
+        let result: redis::RedisResult<()> = conn.srem(k, v).await;
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if self.is_connection_error(&e) {
+                    drop(conn);
+                    self.reconnect().await?;
+                    let mut conn = self.conn.lock().await;
+                    conn.srem(k, v).await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// 获取 Set 中的所有成员
+    pub async fn smembers(&self, k: &str) -> redis::RedisResult<Vec<String>> {
+        let mut conn = self.conn.lock().await;
+        let result: redis::RedisResult<Vec<String>> = conn.smembers(k).await;
+        match result {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                if self.is_connection_error(&e) {
+                    drop(conn);
+                    self.reconnect().await?;
+                    let mut conn = self.conn.lock().await;
+                    conn.smembers(k).await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// 检查成员是否在 Set 中
+    pub async fn sismember(&self, k: &str, v: &str) -> redis::RedisResult<bool> {
+        let mut conn = self.conn.lock().await;
+        let result: redis::RedisResult<bool> = conn.sismember(k, v).await;
+        match result {
+            Ok(result) => Ok(result),
+            Err(e) => {
+                if self.is_connection_error(&e) {
+                    drop(conn);
+                    self.reconnect().await?;
+                    let mut conn = self.conn.lock().await;
+                    conn.sismember(k, v).await
+                } else {
+                    Err(e)
+                }
+            }
+        }
+    }
+
+    /// 使用 RedisKey 向 Set 中添加成员
+    pub async fn sadd_key(&self, key: &RedisKey, value: &str) -> redis::RedisResult<()> {
+        let key_str = key.build();
+        self.sadd(&key_str, value).await
+    }
+
+    /// 使用 RedisKey 从 Set 中移除成员
+    pub async fn srem_key(&self, key: &RedisKey, value: &str) -> redis::RedisResult<()> {
+        let key_str = key.build();
+        self.srem(&key_str, value).await
+    }
+
+    /// 使用 RedisKey 获取 Set 中的所有成员
+    pub async fn smembers_key(&self, key: &RedisKey) -> redis::RedisResult<Vec<String>> {
+        let key_str = key.build();
+        self.smembers(&key_str).await
+    }
+
+    /// 使用 RedisKey 检查成员是否在 Set 中
+    pub async fn sismember_key(&self, key: &RedisKey, value: &str) -> redis::RedisResult<bool> {
+        let key_str = key.build();
+        self.sismember(&key_str, value).await
+    }
 }

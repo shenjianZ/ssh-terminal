@@ -164,6 +164,7 @@ impl SyncService {
             conflict_count: response.conflicts.len(),
             error: None,
             updated_session_ids: Some(response.updated_session_ids),
+            message: response.message,
         })
     }
 
@@ -338,6 +339,7 @@ impl SyncService {
             conflict_count: 0,
             error: Some(resolve_response.message.clone()),
             updated_session_ids: None,
+            message: Some(resolve_response.message),
         };
 
         // 获取当前用户 ID 和设备 ID
@@ -388,6 +390,7 @@ impl SyncService {
                 conflict_count: sync_response.conflicts.len(),
                 error: None,
                 updated_session_ids: resolve_response.new_id.map(|id| vec![id]),
+                message: sync_response.message,
             };
         }
 
@@ -416,6 +419,7 @@ impl SyncService {
             conflict_count: 0,
             error: Some("Use async full_sync instead".to_string()),
             updated_session_ids: None,
+            message: Some("Use async full_sync instead".to_string()),
         })
     }
 }

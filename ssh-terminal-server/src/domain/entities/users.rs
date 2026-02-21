@@ -14,8 +14,11 @@ pub struct Model {
     pub updated_at: i64,
 
     // 新增字段：设备追踪
-    pub last_device_id: Option<String>,
+    pub device_id: Option<String>,
     pub last_sync_at: Option<i64>,
+
+    // 软删除
+    pub deleted_at: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

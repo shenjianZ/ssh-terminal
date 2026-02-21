@@ -63,6 +63,7 @@ pub struct ServerRegisterResult {
     pub user_id: String,
     pub email: String,
     pub created_at: i64,  // 服务器返回的是整数时间戳
+    pub device_id: String,
     pub access_token: String,
     pub refresh_token: String,
 }
@@ -70,6 +71,7 @@ pub struct ServerRegisterResult {
 /// 服务器登录结果（服务器返回格式）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerLoginResult {
+    pub device_id: String,
     pub access_token: String,
     pub refresh_token: String,
 }

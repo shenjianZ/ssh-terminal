@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useSyncStore } from '@/store/syncStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSessionStore } from '@/store/sessionStore';
+import { useUserProfileStore } from '@/store/userProfileStore';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { playSound } from '@/lib/sounds';
@@ -15,6 +16,7 @@ export function SyncButton() {
   const { syncNow, getStatus, lastSyncAt, isSyncing, error, pendingCount } = useSyncStore();
   const { getCurrentUser } = useAuthStore();
   const { reloadSessions } = useSessionStore();
+  const { loadProfile } = useUserProfileStore();
 
   // 定期更新同步状态
   useEffect(() => {
@@ -43,6 +45,7 @@ export function SyncButton() {
         await Promise.all([
           reloadSessions(),
           getCurrentUser(),
+          loadProfile(),
         ]);
       } catch (reloadError) {
         console.error('Failed to reload data after sync:', reloadError);

@@ -16,6 +16,7 @@ export interface SyncReport {
   conflictCount: number;
   error?: string;
   updatedSessionIds?: string[];
+  message?: string;
 }
 
 // 冲突信息（客户端格式）

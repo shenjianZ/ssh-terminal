@@ -13,11 +13,18 @@ pub async fn get_profile_handler(
     State(state): State<AppState>,
     UserId(user_id): UserId,
 ) -> Result<Json<ApiResponse<UserProfileResult>>, axum::http::StatusCode> {
-    let repo = UserProfileRepository::new(state.pool);
+    let repo = UserProfileRepository::new(state.pool.clone());
+    let user_repo = crate::repositories::user_repository::UserRepository::new(state.pool);
 
     match repo.find_by_user_id(&user_id).await {
         Ok(Some(profile)) => {
-            let vo = profile_to_result(profile);
+            // 获取用户 email（只获取未删除用户的邮箱）
+            let email = match user_repo.get_email_by_id(&user_id).await {
+                Ok(Some(email)) => email,
+                Ok(None) => String::new(),
+                Err(_) => String::new(),
+            };
+            let vo = profile_to_result(profile, email);
             Ok(Json(ApiResponse::success(vo)))
         }
         Ok(None) => Err(axum::http::StatusCode::NOT_FOUND),
@@ -34,7 +41,8 @@ pub async fn update_profile_handler(
     UserId(user_id): UserId,
     Json(request): Json<UpdateProfileRequest>,
 ) -> Result<Json<ApiResponse<UserProfileResult>>, axum::http::StatusCode> {
-    let repo = UserProfileRepository::new(state.pool);
+    let repo = UserProfileRepository::new(state.pool.clone());
+    let user_repo = crate::repositories::user_repository::UserRepository::new(state.pool);
     
     // 先获取现有资料
     let existing = match repo.find_by_user_id(&user_id).await {
@@ -62,7 +70,13 @@ pub async fn update_profile_handler(
             
             match repo.create(new_profile).await {
                 Ok(created) => {
-                    let vo = profile_to_result(created);
+                    // 获取用户 email（只获取未删除用户的邮箱）
+                    let email = match user_repo.get_email_by_id(&user_id).await {
+                        Ok(Some(email)) => email,
+                        Ok(None) => String::new(),
+                        Err(_) => String::new(),
+                    };
+                    let vo = profile_to_result(created, email);
                     return Ok(Json(ApiResponse::success(vo)));
                 }
                 Err(e) => {
@@ -89,7 +103,13 @@ pub async fn update_profile_handler(
     
     match repo.update(&user_id, updated).await {
         Ok(profile) => {
-            let vo = profile_to_result(profile);
+            // 获取用户 email（只获取未删除用户的邮箱）
+            let email = match user_repo.get_email_by_id(&user_id).await {
+                Ok(Some(email)) => email,
+                Ok(None) => String::new(),
+                Err(_) => String::new(),
+            };
+            let vo = profile_to_result(profile, email);
             Ok(Json(ApiResponse::success(vo)))
         }
         Err(e) => {
@@ -116,10 +136,11 @@ pub async fn delete_profile_handler(
 }
 
 /// 将 Model 转换为 Result
-fn profile_to_result(profile: user_profiles::Model) -> UserProfileResult {
+fn profile_to_result(profile: user_profiles::Model, email: String) -> UserProfileResult {
     UserProfileResult {
         id: profile.id,
         user_id: profile.user_id,
+        email,
         username: profile.username,
         phone: profile.phone,
         qq: profile.qq,

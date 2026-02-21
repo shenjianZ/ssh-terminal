@@ -4,6 +4,7 @@ use serde::Serialize;
 pub struct UserProfileResult {
     pub id: i64,
     pub user_id: String,
+    pub email: String,
     pub username: Option<String>,
     pub phone: Option<String>,
     pub qq: Option<String>,

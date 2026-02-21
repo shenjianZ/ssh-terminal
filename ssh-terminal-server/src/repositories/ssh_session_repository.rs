@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sea_orm::{DatabaseConnection, EntityTrait, ActiveModelTrait, QueryFilter, ColumnTrait, QueryOrder};
+use sea_orm::prelude::Expr;
 use crate::domain::entities::ssh_sessions::{self, Entity as SshSession};
 
 pub struct SshSessionRepository {
@@ -16,6 +17,18 @@ impl SshSessionRepository {
         let sessions = SshSession::find()
             .filter(ssh_sessions::Column::UserId.eq(user_id))
             .filter(ssh_sessions::Column::DeletedAt.is_null())
+            .order_by_desc(ssh_sessions::Column::UpdatedAt)
+            .all(&self.db)
+            .await?;
+
+        Ok(sessions)
+    }
+
+    /// 根据 user_id 查找指定时间之后更新的会话（增量查询）
+    pub async fn find_by_user_id_updated_after(&self, user_id: &str, after: i64) -> Result<Vec<ssh_sessions::Model>> {
+        let sessions = SshSession::find()
+            .filter(ssh_sessions::Column::UserId.eq(user_id))
+            .filter(ssh_sessions::Column::UpdatedAt.gt(after))
             .order_by_desc(ssh_sessions::Column::UpdatedAt)
             .all(&self.db)
             .await?;
@@ -137,8 +150,55 @@ impl SshSessionRepository {
             client_ver: sea_orm::Set(existing.client_ver),
             last_synced_at: sea_orm::Set(existing.last_synced_at),
             created_at: sea_orm::Set(existing.created_at),
-            updated_at: sea_orm::Set(existing.updated_at),
+            updated_at: sea_orm::Set(now),
             deleted_at: sea_orm::Set(Some(now)),
+        };
+
+        active_model.update(&self.db).await?;
+        Ok(())
+    }
+
+    /// 根据 user_id 软删除所有会话
+    pub async fn soft_delete_by_user_id(&self, user_id: &str) -> Result<u64> {
+        let now = chrono::Utc::now().timestamp();
+
+        let result = SshSession::update_many()
+            .filter(ssh_sessions::Column::UserId.eq(user_id))
+            .filter(ssh_sessions::Column::DeletedAt.is_null())
+            .col_expr(ssh_sessions::Column::DeletedAt, Expr::val(now).into())
+            .exec(&self.db)
+            .await
+            .map_err(|e| anyhow::anyhow!("批量软删除失败: {}", e))?;
+
+        Ok(result.rows_affected)
+    }
+
+    /// 软删除会话（使用指定时间戳）
+    pub async fn soft_delete_with_time(&self, id: &str, delete_time: i64) -> Result<()> {
+        let existing = self.find_by_id(id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("SSH session not found"))?;
+
+        let active_model = ssh_sessions::ActiveModel {
+            id: sea_orm::Set(existing.id),
+            user_id: sea_orm::Set(existing.user_id),
+            name: sea_orm::Set(existing.name),
+            host: sea_orm::Set(existing.host),
+            port: sea_orm::Set(existing.port),
+            username: sea_orm::Set(existing.username),
+            group_name: sea_orm::Set(existing.group_name),
+            terminal_type: sea_orm::Set(existing.terminal_type),
+            columns: sea_orm::Set(existing.columns),
+            rows: sea_orm::Set(existing.rows),
+            auth_method_encrypted: sea_orm::Set(existing.auth_method_encrypted),
+            auth_nonce: sea_orm::Set(existing.auth_nonce),
+            auth_key_salt: sea_orm::Set(existing.auth_key_salt),
+            server_ver: sea_orm::Set(existing.server_ver),
+            client_ver: sea_orm::Set(existing.client_ver),
+            last_synced_at: sea_orm::Set(existing.last_synced_at),
+            created_at: sea_orm::Set(existing.created_at),
+            updated_at: sea_orm::Set(delete_time),
+            deleted_at: sea_orm::Set(Some(delete_time)),
         };
 
         active_model.update(&self.db).await?;

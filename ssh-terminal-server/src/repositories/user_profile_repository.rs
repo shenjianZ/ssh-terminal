@@ -22,6 +22,18 @@ impl UserProfileRepository {
         Ok(profile)
     }
 
+    /// 根据 user_id 查找指定时间之后更新的用户资料（增量查询）
+    pub async fn find_by_user_id_updated_after(&self, user_id: &str, after: i64) -> Result<Option<user_profiles::Model>> {
+        let profile = UserProfile::find()
+            .filter(user_profiles::Column::UserId.eq(user_id))
+            .filter(user_profiles::Column::UpdatedAt.gt(after))
+            .filter(user_profiles::Column::DeletedAt.is_null())
+            .one(&self.db)
+            .await?;
+
+        Ok(profile)
+    }
+
     /// 创建用户资料
     /// 注意：由于 id 是自增主键（i64），需要使用 Entity::insert() + 手动查询
     /// 以避免 SQLite last_insert_rowid() 问题

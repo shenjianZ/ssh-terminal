@@ -1,4 +1,5 @@
 use crate::AppState;
+use crate::repositories::user_repository::UserRepository;
 use axum::{
     extract::{Request, State},
     http::{HeaderMap, StatusCode},
@@ -44,8 +45,22 @@ pub async fn auth_middleware(
     )
     .map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    // 3. 将 user_id 添加到请求扩展
-    req.extensions_mut().insert(token_data.claims.sub);
+    let user_id = &token_data.claims.sub;
+
+    // 3. 检查用户是否已被软删除
+    let user_repo = UserRepository::new(state.pool.clone());
+    let user = user_repo
+        .find_by_id_raw(user_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if user.map(|u| u.deleted_at.is_some()).unwrap_or(true) {
+        // 用户不存在或已被删除
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // 4. 将 user_id 添加到请求扩展
+    req.extensions_mut().insert(user_id.clone());
 
     Ok(next.run(req).await)
 }

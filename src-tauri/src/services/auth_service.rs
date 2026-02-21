@@ -106,8 +106,8 @@ impl AuthService {
             .map_err(|e| anyhow!("Failed to get user profile after login: {}", e))?;
         let user_id = profile.user_id;
 
-        // 生成设备 ID（本地生成，固定在设备上）
-        let device_id = Uuid::new_v4().to_string();
+        // 使用服务器返回的 device_id
+        let device_id = server_result.device_id.clone();
 
         // 计算 token 过期时间（24小时后）
         let now = chrono::Utc::now().timestamp();
@@ -202,8 +202,8 @@ impl AuthService {
         // 设置 token 到 API 客户端（server_result.access_token 是服务端返回的字段名）
         self.update_client_token(server_result.access_token.clone());
 
-        // 生成设备 ID（本地生成，固定在设备上）
-        let device_id = Uuid::new_v4().to_string();
+        // 使用服务器返回的 device_id
+        let device_id = server_result.device_id.clone();
 
         // 计算 token 过期时间（24小时后）
         let now = chrono::Utc::now().timestamp();

@@ -29,6 +29,9 @@ pub struct SyncResponse {
     /// === 冲突信息 ===
     /// 需要解决的冲突
     pub conflicts: Vec<ConflictInfo>,
+
+    /// 消息提示
+    pub message: Option<String>,
 }
 
 /// 冲突信息
