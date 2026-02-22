@@ -2,6 +2,8 @@
 export interface RegisterRequest {
   email: string
   password: string
+  /** 邮箱验证码（当服务器启用邮件验证时必填） */
+  verify_code?: string
 }
 
 export interface RegisterResult {
@@ -11,6 +13,14 @@ export interface RegisterResult {
   device_id: string
   access_token: string
   refresh_token: string
+}
+
+export interface SendVerifyCodeRequest {
+  email: string
+}
+
+export interface SendVerifyCodeResult {
+  queued: boolean
 }
 
 export interface LoginRequest {

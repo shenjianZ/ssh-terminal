@@ -35,10 +35,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // 注册
-  async function register(email: string, password: string) {
+  async function register(email: string, password: string, verifyCode?: string) {
     loading.value = true
     try {
-      const response = await authApi.register(email, password)
+      const response = await authApi.register(email, password, verifyCode)
       const data = response.data as RegisterResult
       setTokens(data.access_token, data.refresh_token)
       user.value = { id: data.user_id, email: data.email }

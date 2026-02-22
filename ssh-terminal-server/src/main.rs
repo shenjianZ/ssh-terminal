@@ -111,9 +111,16 @@ async fn main() -> anyhow::Result<()> {
             .route("/auth/login", post(handlers::auth::login))
             .route("/auth/refresh", post(handlers::auth::refresh))
             // 邮件 API（公开，无需认证）
+            // 同步版本（推荐）：立即返回真实的发送结果
             .route(
-                "/api/email/send-verify-code",
-                post(handlers::email::send_verify_code_handler),
+                "/api/email/send-verify-code-sync",
+                post(handlers::email::send_verify_code_sync_handler),
+            )
+            // 异步版本（已弃用）：使用队列模式，不会立即返回发送结果
+            // ⚠️ 不建议使用，如果邮箱无效仍会返回成功
+            .route(
+                "/api/email/send-verify-code-async",
+                post(handlers::email::send_verify_code_async_handler),
             )
     } else {
         Router::new()

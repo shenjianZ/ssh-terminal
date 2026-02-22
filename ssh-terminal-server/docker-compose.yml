@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ssh-terminal-server
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+      - DATABASE_TYPE=postgresql
+      - DATABASE_HOST=db
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_DATABASE=ssh_terminal_server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AUTH_JWT_SECRET=9f7d3c7a564dfkopp26smb2644nqzfvbsao9f7d3c7a1a8f28544b5e6d7a
+      - EMAIL_ENABLED=false
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./config:/app/config:ro
+    restart: unless-stopped
+    networks:
+      - ssh-terminal-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: ssh-terminal-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=ssh_terminal_server
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ssh-terminal-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ssh-terminal-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - ssh-terminal-network
+
+volumes:
+  postgres-data:
+    driver: local
+
+networks:
+  ssh-terminal-network:
+    driver: bridge

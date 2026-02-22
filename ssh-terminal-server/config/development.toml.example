@@ -33,17 +33,35 @@ password = ""  # 可选
 db = 0
 
 [email]
+# ==================== 邮件配置 ====================
+# 邮件功能用于发送验证码、通知等
+
 # 是否启用邮件功能
+# - false: 不启用邮件验证，用户注册时无需验证码
+# - true: 启用邮件验证，用户注册时必须输入验证码
 enabled = false
 
-# SMTP 配置
+# SMTP 服务器配置
+# 常用 SMTP 服务器：
+# - 163邮箱: smtp.163.com, 端口 465 (SSL) 或 994 (SSL)
+# - QQ邮箱: smtp.qq.com, 端口 465 (SSL) 或 587 (STARTTLS)
+# - Gmail: smtp.gmail.com, 端口 587 (STARTTLS) 或 465 (SSL)
+# - Outlook: smtp-mail.outlook.com, 端口 587 (STARTTLS)
 smtp_host = "smtp.163.com"
 smtp_port = 465
+
+# SMTP 认证信息
+# ⚠️ 注意：对于 QQ/163 等邮箱，需要使用"授权码"而不是登录密码
+# 获取方式：邮箱设置 -> 账户 -> POP3/SMTP 服务 -> 生成授权码
 smtp_username = "your-email@gmail.com"
 smtp_password = "your-app-password"
+
+# 发件人信息
 from_name = "SSH Terminal"
 from_email = "your-email@gmail.com"
 
-# Worker 配置
+# Worker 配置（仅异步模式使用）
+# worker_pool_size: 并发发送邮件的最大数量
+# worker_timeout_seconds: 单个邮件发送超时时间
 worker_pool_size = 5
 worker_timeout_seconds = 10

@@ -12,8 +12,9 @@ pub struct RequestId(pub String);
 
 /// 截断长字符串（超过50字符用"....."代替）
 fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}.....", &s[..max_len])
+    if s.chars().count() > max_len {
+        // 使用 chars().take() 确保在字符边界处截断
+        s.chars().take(max_len).collect::<String>() + "....."
     } else {
         s.to_string()
     }

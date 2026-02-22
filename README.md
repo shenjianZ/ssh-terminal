@@ -127,11 +127,37 @@ docker run -d \
   -e AUTH_JWT_SECRET=9f7d3c365454dsfsasa8f28544b5e6d7a \
   -e AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES=15 \
   -e AUTH_REFRESH_TOKEN_EXPIRATION_DAYS=7 \
+  # ==================== 邮件配置（可选） ====================
+  # 是否启用邮件功能（用于发送验证码）
+  # - false: 不启用邮件验证
+  # - true: 启用邮件验证，用户注册时必须输入验证码
+  -e EMAIL_ENABLED=false \
+  # SMTP 服务器配置
+  -e EMAIL_SMTP_HOST=smtp.163.com \
+  -e EMAIL_SMTP_PORT=465 \
+  -e EMAIL_SMTP_USERNAME=your-email@163.com \
+  -e EMAIL_SMTP_PASSWORD=your-app-password \
+  # 发件人信息
+  -e EMAIL_FROM_NAME="SSH Terminal" \
+  -e EMAIL_FROM_EMAIL=your-email@163.com \
+  # Worker 配置（仅异步模式使用）
+  -e EMAIL_WORKER_POOL_SIZE=10 \
+  -e EMAIL_WORKER_TIMEOUT_SECONDS=10 \
   # ⚠️ 本机持久化目录
   -v /data/ssh-terminal-server/data:/data \
   --network ssh-terminal-net \
   registry.cn-hangzhou.aliyuncs.com/pull-image/ssh-terminal-server:latest
 ```
+
+> ⚠️ **邮件配置提示**：
+> - 对于 QQ/163 等邮箱，需要使用"授权码"而不是登录密码
+> - 获取方式：邮箱设置 → 账户 → POP3/SMTP 服务 → 生成授权码
+> - Gmail 需要启用"两步验证"并生成"应用专用密码"
+> - 常用 SMTP 服务器：
+>   - 163邮箱: smtp.163.com, 端口 465 (SSL) 或 994 (SSL)
+>   - QQ邮箱: smtp.qq.com, 端口 465 (SSL) 或 587 (STARTTLS)
+>   - Gmail: smtp.gmail.com, 端口 587 (STARTTLS) 或 465 (SSL)
+>   - Outlook: smtp-mail.outlook.com, 端口 587 (STARTTLS)
 
 ### 环境变量说明
 
@@ -147,6 +173,15 @@ docker run -d \
 | `AUTH_JWT_SECRET` | JWT 签名密钥 | - |
 | `AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES` | 访问令牌过期时间（分钟） | `15` |
 | `AUTH_REFRESH_TOKEN_EXPIRATION_DAYS` | 刷新令牌过期时间（天） | `7` |
+| `EMAIL_ENABLED` | 是否启用邮件功能 | `false` |
+| `EMAIL_SMTP_HOST` | SMTP 服务器地址 | - |
+| `EMAIL_SMTP_PORT` | SMTP 服务器端口 | - |
+| `EMAIL_SMTP_USERNAME` | SMTP 用户名 | - |
+| `EMAIL_SMTP_PASSWORD` | SMTP 密码/授权码 | - |
+| `EMAIL_FROM_NAME` | 发件人名称 | `SSH Terminal` |
+| `EMAIL_FROM_EMAIL` | 发件人邮箱地址 | - |
+| `EMAIL_WORKER_POOL_SIZE` | Worker 连接池大小 | `10` |
+| `EMAIL_WORKER_TIMEOUT_SECONDS` | Worker 超时时间（秒） | `10` |
 
 ### 验证部署
 

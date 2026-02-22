@@ -52,8 +52,8 @@ impl Mailer {
         let email = Message::builder()
             .from(format!("{} <{}>", self.config.from_name, self.config.from_email)
                 .parse()
-                .context("Invalid from address")?)
-            .to(task.to.parse().context("Invalid to address")?)
+                .map_err(|_| anyhow::anyhow!("Invalid from address"))?)
+            .to(task.to.parse().map_err(|_| anyhow::anyhow!("Invalid email address: {}", task.to))?)
             .subject(subject)
             .header(ContentType::TEXT_HTML)
             .body(html_body.to_string())
@@ -62,7 +62,19 @@ impl Mailer {
         // 发送邮件
         mailer
             .send(&email)
-            .context("Failed to send email via SMTP")?;
+            .map_err(|e| {
+                // 根据错误类型返回不同的错误消息
+                let error_msg = e.to_string();
+                if error_msg.contains("timeout") || error_msg.contains("timed out") {
+                    anyhow::anyhow!("Email sending timeout")
+                } else if error_msg.contains("connection") || error_msg.contains("connect") {
+                    anyhow::anyhow!("Cannot connect to email server")
+                } else if error_msg.contains("recipient") || error_msg.contains("invalid") {
+                    anyhow::anyhow!("Invalid email address: {}", task.to)
+                } else {
+                    anyhow::anyhow!("Failed to send email via SMTP: {}", error_msg)
+                }
+            })?;
 
         Ok(())
     }

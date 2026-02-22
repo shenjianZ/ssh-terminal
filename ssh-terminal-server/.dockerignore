@@ -1,0 +1,44 @@
+# Rust 构建产物
+target/
+**/*.rs.bk
+*.pdb
+
+# 文档
+docs/
+*.md
+!README.md
+
+# 配置文件示例
+config/*.example
+
+# 数据
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# 日志
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 其他
+.env
+.env.*
+*.toml.example
+build-musl.sh

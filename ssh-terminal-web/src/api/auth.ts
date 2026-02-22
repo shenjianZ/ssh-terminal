@@ -1,8 +1,12 @@
 import request from '@/utils/request'
-import type { ApiResponse, RegisterRequest, RegisterResult, LoginRequest, LoginResult, RefreshRequest, RefreshResult } from '@/types'
+import type { ApiResponse, RegisterRequest, RegisterResult, LoginRequest, LoginResult, RefreshRequest, RefreshResult, SendVerifyCodeRequest, SendVerifyCodeResult } from '@/types'
 
-export function register(email: string, password: string): Promise<ApiResponse<RegisterResult>> {
-  return request.post('/auth/register', { email, password }).then(res => res.data)
+export function register(email: string, password: string, verifyCode?: string): Promise<ApiResponse<RegisterResult>> {
+  return request.post('/auth/register', { email, password, verify_code: verifyCode }).then(res => res.data)
+}
+
+export function sendVerifyCode(email: string): Promise<ApiResponse<SendVerifyCodeResult>> {
+  return request.post('/api/email/send-verify-code-sync', { email }).then(res => res.data)
 }
 
 export function login(email: string, password: string): Promise<ApiResponse<LoginResult>> {

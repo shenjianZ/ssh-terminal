@@ -36,6 +36,29 @@
               @keyup.enter="handleRegister"
             />
           </n-form-item>
+          
+          <!-- 验证码输入框（默认隐藏，根据后端配置动态显示） -->
+          <n-form-item v-if="showVerifyCode" label="验证码" path="verifyCode">
+            <div class="verify-code-input-wrapper">
+              <n-input
+                v-model:value="formData.verifyCode"
+                placeholder="请输入6位验证码"
+                size="large"
+                maxlength="6"
+                @keyup.enter="handleRegister"
+              />
+              <n-button
+                type="primary"
+                size="large"
+                :disabled="isCountingDown"
+                :loading="sendingCode"
+                @click="handleSendVerifyCode"
+              >
+                {{ countdownText }}
+              </n-button>
+            </div>
+          </n-form-item>
+          
           <n-form-item>
             <n-button
               type="primary"
@@ -60,9 +83,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores'
+import { sendVerifyCode as sendVerifyCodeApi } from '@/api/auth'
 import { useMessage } from 'naive-ui'
 import type { FormInst, FormRules } from 'naive-ui'
 
@@ -74,11 +98,39 @@ const formRef = ref<FormInst | null>(null)
 const formData = reactive({
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  verifyCode: ''
 })
+
+// 验证码相关状态
+const showVerifyCode = ref(false)
+const sendingCode = ref(false)
+const countdown = ref(0)
+const countdownTimer = ref<number | null>(null)
+
+// 倒计时文字
+const countdownText = computed(() => {
+  if (countdown.value > 0) {
+    return `${countdown.value}秒后重试`
+  }
+  return '发送验证码'
+})
+
+const isCountingDown = computed(() => countdown.value > 0)
 
 const validatePasswordSame = (rule: any, value: string) => {
   return value === formData.password
+}
+
+const validateVerifyCode = (rule: any, value: string) => {
+  if (!showVerifyCode.value) return true
+  if (!value) {
+    return new Error('请输入验证码')
+  }
+  if (!/^\d{6}$/.test(value)) {
+    return new Error('请输入6位数字验证码')
+  }
+  return true
 }
 
 const rules: FormRules = {
@@ -93,21 +145,97 @@ const rules: FormRules = {
   confirmPassword: [
     { required: true, message: '请确认密码', trigger: 'blur' },
     { validator: validatePasswordSame, message: '两次输入的密码不一致', trigger: 'blur' }
+  ],
+  verifyCode: [
+    { validator: validateVerifyCode, trigger: 'blur' }
   ]
+}
+
+// 发送验证码
+async function handleSendVerifyCode() {
+  // 验证邮箱
+  if (!formData.email) {
+    message.error('请先输入邮箱地址')
+    return
+  }
+  
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    message.error('请输入有效的邮箱地址')
+    return
+  }
+
+  try {
+    sendingCode.value = true
+    await sendVerifyCodeApi(formData.email)
+    message.success('验证码已发送，请查收邮箱')
+    
+    // 开始倒计时
+    startCountdown()
+  } catch (error: any) {
+    console.error('Send verify code error:', error)
+    const errorMsg = error.response?.data?.message || error.message || '发送验证码失败'
+    message.error(errorMsg)
+  } finally {
+    sendingCode.value = false
+  }
+}
+
+// 开始倒计时
+function startCountdown() {
+  countdown.value = 60
+  countdownTimer.value = window.setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      stopCountdown()
+    }
+  }, 1000)
+}
+
+// 停止倒计时
+function stopCountdown() {
+  if (countdownTimer.value) {
+    clearInterval(countdownTimer.value)
+    countdownTimer.value = null
+  }
+  countdown.value = 0
 }
 
 async function handleRegister() {
   try {
     await formRef.value?.validate()
-    await authStore.register(formData.email, formData.password)
+    
+    // 如果显示验证码字段，则必须填写验证码
+    const verifyCode = showVerifyCode.value ? formData.verifyCode : undefined
+    
+    await authStore.register(formData.email, formData.password, verifyCode)
     message.success('注册成功')
+    
+    // 清理倒计时
+    stopCountdown()
+    
     router.push('/')
   } catch (error: any) {
     console.error('Register error:', error)
+    
+    // 检查是否是验证码相关的错误
     const errorMsg = error.response?.data?.message || error.message || '注册失败'
+    
+    // 如果后端返回验证码必填的错误，显示验证码输入框
+    if (errorMsg.includes('验证码') || errorMsg.includes('verify_code') || errorMsg.includes('verify code')) {
+      showVerifyCode.value = true
+      message.error('需要邮箱验证码，请先发送验证码')
+      return
+    }
+    
     message.error(errorMsg)
   }
 }
+
+// 组件卸载时清理定时器
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  stopCountdown()
+})
 </script>
 
 <style scoped>
@@ -138,5 +266,20 @@ async function handleRegister() {
   align-items: center;
   gap: 8px;
   margin-top: 16px;
+}
+
+.verify-code-input-wrapper {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.verify-code-input-wrapper :deep(.n-input) {
+  flex: 1;
+}
+
+.verify-code-input-wrapper :deep(.n-button) {
+  white-space: nowrap;
+  min-width: 120px;
 }
 </style>

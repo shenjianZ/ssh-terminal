@@ -109,6 +109,10 @@ pub enum MessageKey {
     ErrorVerifyCodeInvalid,
     ErrorEmailInvalidTemplate,
     SuccessGetQueueStatus,
+    ErrorEmailSendFailed,
+    ErrorEmailInvalidAddress,
+    ErrorEmailConnectionFailed,
+    ErrorEmailTimeout,
 }
 
 impl MessageKey {
@@ -214,6 +218,10 @@ impl MessageKey {
             MessageKey::ErrorVerifyCodeInvalid => "api.email.error_verify_code_invalid",
             MessageKey::ErrorEmailInvalidTemplate => "api.email.error_invalid_template",
             MessageKey::SuccessGetQueueStatus => "api.email.success_get_queue_status",
+            MessageKey::ErrorEmailSendFailed => "api.email.error_send_failed",
+            MessageKey::ErrorEmailInvalidAddress => "api.email.error_invalid_address",
+            MessageKey::ErrorEmailConnectionFailed => "api.email.error_connection_failed",
+            MessageKey::ErrorEmailTimeout => "api.email.error_timeout",
         }
     }
 }
@@ -366,7 +374,11 @@ static MESSAGES: Lazy<serde_json::Value> = Lazy::new(|| {
                     "error_verify_code_expired": "验证码已过期",
                     "error_verify_code_invalid": "验证码错误",
                     "error_invalid_template": "无效的邮件模板",
-                    "success_get_queue_status": "获取队列状态成功"
+                    "success_get_queue_status": "获取队列状态成功",
+                    "error_send_failed": "邮件发送失败，请检查邮箱地址是否正确",
+                    "error_invalid_address": "邮箱地址无效",
+                    "error_connection_failed": "无法连接到邮件服务器",
+                    "error_timeout": "邮件发送超时，请稍后重试"
                 }
             }
         },
@@ -471,7 +483,11 @@ static MESSAGES: Lazy<serde_json::Value> = Lazy::new(|| {
                     "error_verify_code_expired": "Verification code expired",
                     "error_verify_code_invalid": "Invalid verification code",
                     "error_invalid_template": "Invalid email template",
-                    "success_get_queue_status": "Get queue status successful"
+                    "success_get_queue_status": "Get queue status successful",
+                    "error_send_failed": "Failed to send email, please check if the email address is correct",
+                    "error_invalid_address": "Invalid email address",
+                    "error_connection_failed": "Cannot connect to email server",
+                    "error_timeout": "Email sending timeout, please try again later"
                 }
             }
         }
