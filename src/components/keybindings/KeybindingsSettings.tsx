@@ -13,6 +13,8 @@ import { KeybindingEditor } from './KeybindingEditor';
 import { useKeybindingStore } from '@/store/keybindingStore';
 import { KEYBINDING_ACTIONS } from '@/types/keybinding';
 import { Search, FileDown, FileUp, RotateCcw } from 'lucide-react';
+import { save, open } from '@tauri-apps/plugin-dialog';
+import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 
 /**
  * 快捷键设置页面
@@ -77,9 +79,6 @@ export function KeybindingsSettings() {
       const configJson = await exportConfig();
 
       // 使用 Tauri 的文件对话框选择保存位置
-      const { save } = await import('@tauri-apps/plugin-dialog');
-      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-
       const filePath = await save({
         filters: [
           {
@@ -101,9 +100,6 @@ export function KeybindingsSettings() {
   const handleImport = async () => {
     try {
       // 使用 Tauri 的文件对话框选择导入文件
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const { readTextFile } = await import('@tauri-apps/plugin-fs');
-
       const filePath = await open({
         filters: [
           {

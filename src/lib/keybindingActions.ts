@@ -1,5 +1,6 @@
 import { useTerminalStore } from '@/store/terminalStore';
 import { useSessionStore } from '@/store/sessionStore';
+import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { invoke } from '@tauri-apps/api/core';
 
 /**
@@ -382,7 +383,6 @@ export class KeybindingActionExecutor {
   private async executeTerminalZoomReset(): Promise<boolean> {
     try {
       // 注意：这个方法不会被调用，实际处理在 XTermWrapper 中
-      const { useTerminalConfigStore } = await import('@/store/terminalConfigStore');
       const { config } = useTerminalConfigStore.getState();
       useTerminalConfigStore.getState().setConfig({ fontSize: config.fontSize });
       console.log('[KeybindingExecutor] Font size reset to config value:', config.fontSize);

@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
 import type { User, LoginRequest, RegisterRequest, AuthResponse, ApiResponse } from '@/types/auth';
 import i18n from '@/i18n/config';
+import { useSyncStore } from './syncStore';
+import { useSessionStore } from './sessionStore';
+import { useUserProfileStore } from './userProfileStore';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -71,8 +74,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 登录成功后自动同步服务器数据
       try {
-        const { useSyncStore } = await import('./syncStore');
-        const { useSessionStore } = await import('./sessionStore');
         const syncStore = useSyncStore.getState();
         const sessionStore = useSessionStore.getState();
         const authStore = get();
@@ -137,7 +138,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 注册成功后迁移匿名用户的 SSH 会话并加载本地用户资料
       try {
-        const { useUserProfileStore } = await import('./userProfileStore');
         const userProfileStore = useUserProfileStore.getState();
         const authStore = get();
 
@@ -174,8 +174,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // 清除用户资料和会话数据
       try {
-        const { useSessionStore } = await import('./sessionStore');
-        const { useUserProfileStore } = await import('./userProfileStore');
         const sessionStore = useSessionStore.getState();
         const userProfileStore = useUserProfileStore.getState();
 
@@ -212,8 +210,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // 自动登录后尝试同步
         try {
-          const { useSyncStore } = await import('./syncStore');
-          const { useSessionStore } = await import('./sessionStore');
           const syncStore = useSyncStore.getState();
           const sessionStore = useSessionStore.getState();
           const authStore = get();
@@ -259,8 +255,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // 切换账号后重新同步
         try {
-          const { useSyncStore } = await import('./syncStore');
-          const { useSessionStore } = await import('./sessionStore');
           const syncStore = useSyncStore.getState();
           const sessionStore = useSessionStore.getState();
 

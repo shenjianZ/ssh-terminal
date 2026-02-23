@@ -6,6 +6,8 @@ import { X, Download, Video } from 'lucide-react';
 import type { VideoExportProgress } from '@/types/recording';
 import { VideoExporter } from '@/lib/recorder/VideoExporter';
 import { useRecordingStore } from '@/store/recordingStore';
+import { save } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
 
 interface VideoExportDialogProps {
   open: boolean;
@@ -157,8 +159,6 @@ export function VideoExportDialog({
 
     try {
       // 使用 Tauri 的文件保存对话框
-      const { save } = await import('@tauri-apps/plugin-dialog');
-
       // 根据 Blob 的 MIME 类型确定文件扩展名
       const mimeType = exportedBlob.type || 'video/webm';
       let fileExtension = 'webm';
@@ -189,7 +189,6 @@ export function VideoExportDialog({
         const uint8Array = new Uint8Array(arrayBuffer);
 
         // 使用 Tauri 的 invoke 调用 Rust 后端写入文件
-        const { invoke } = await import('@tauri-apps/api/core');
         await invoke('fs_write_file', {
           path: filePath,
           contents: Array.from(uint8Array), // 转换为普通数组以便序列化

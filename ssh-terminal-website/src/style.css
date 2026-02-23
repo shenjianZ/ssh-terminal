@@ -248,7 +248,7 @@
   }
 
   .custom-scrollbar::-webkit-scrollbar-track {
-    background: var(--muted/50);
+    background: oklch(var(--muted) / 0.5);
     border-radius: 4px;
   }
 
@@ -264,11 +264,11 @@
 
   /* 深色模式下的自定义滚动条 */
   .dark .custom-scrollbar {
-    scrollbar-color: #ffffff var(--muted/50);
+    scrollbar-color: #ffffff oklch(var(--muted) / 0.5);
   }
 
   .dark .custom-scrollbar::-webkit-scrollbar-track {
-    background: var(--muted/50);
+    background: oklch(var(--muted) / 0.5);
   }
 
   .dark .custom-scrollbar::-webkit-scrollbar-thumb {
@@ -291,7 +291,7 @@
   }
 
   .scrollbar-horizontal::-webkit-scrollbar-track {
-    background: var(--muted/50);
+    background: oklch(var(--muted) / 0.5);
     border-radius: 4px;
   }
 
@@ -307,7 +307,7 @@
 
   /* 深色模式下的水平滚动条 */
   .dark .scrollbar-horizontal {
-    scrollbar-color: #ffffff var(--muted/50);
+    scrollbar-color: #ffffff oklch(var(--muted) / 0.5);
   }
 
   .dark .scrollbar-horizontal::-webkit-scrollbar-thumb {

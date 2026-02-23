@@ -9,6 +9,7 @@ import {
   Pause,
   Square,
 } from 'lucide-react';
+import { VideoRecorder } from '@/lib/recorder/VideoRecorder';
 
 interface RecordingControlsProps {
   connectionId: string;
@@ -146,7 +147,6 @@ export function RecordingControls({
     }
 
     // 3. 初始化VideoRecorder（在倒计时前完成Canvas准备）
-    const { VideoRecorder } = await import('@/lib/recorder/VideoRecorder');
     const videoRecorder = new VideoRecorder();
     try {
       const terminalConfig = useTerminalConfigStore.getState().config;

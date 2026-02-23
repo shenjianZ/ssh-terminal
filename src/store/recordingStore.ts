@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { save, open } from '@tauri-apps/plugin-dialog';
+import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import type {
   RecordingFile,
   RecordingSession,
@@ -544,9 +546,6 @@ export const useRecordingStore = create<RecordingStore>((set, get) => ({
       }
 
       // 使用文件对话框保存
-      const { save } = await import('@tauri-apps/plugin-dialog');
-      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-
       const defaultFileName = `${recordingFile.metadata.sessionName}_${recordingFile.metadata.startTime}.json`;
       const filePath = await save({
         filters: [
@@ -568,9 +567,6 @@ export const useRecordingStore = create<RecordingStore>((set, get) => ({
 
   importRecordingFromJson: async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const { readTextFile } = await import('@tauri-apps/plugin-fs');
-
       const filePath = await open({
         filters: [
           {

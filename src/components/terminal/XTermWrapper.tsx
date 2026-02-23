@@ -5,6 +5,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Sparkles, Copy, Clipboard, Search, Trash2, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useTerminalConfigStore } from '@/store/terminalConfigStore';
 import { useTerminalStore } from '@/store/terminalStore';
@@ -761,9 +763,6 @@ export function XTermWrapper({ connectionId }: XTermWrapperProps) {
         const content = lines.join('\n');
 
         // 使用 Tauri 的文件对话框 API
-        const { save } = await import('@tauri-apps/plugin-dialog');
-        const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-
         const filePath = await save({
           filters: [
             {
