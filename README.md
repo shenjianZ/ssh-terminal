@@ -113,36 +113,36 @@ docker run -d \
   --name ssh-terminal \
   --restart unless-stopped \
   -p 6236:3000 \
-  -e SERVER_HOST=0.0.0.0 \
-  -e SERVER_PORT=3000 \
-  -e DATABASE_TYPE=sqlite \
-  -e DATABASE_PATH=/data/app.db \
+  -e SERVER__HOST=0.0.0.0 \
+  -e SERVER__PORT=3000 \
+  -e DATABASE__TYPE=sqlite \
+  -e DATABASE__PATH=/data/app.db \
   # ⚠️ 改成你的 Redis 容器名或地址
-  -e REDIS_HOST=Redis7 \
+  -e REDIS__HOST=Redis7 \
   # ⚠️ Redis 端口（一般不用改）
-  -e REDIS_PORT=6379 \
+  -e REDIS__PORT=6379 \
   # ⚠️ 改成你的 Redis 密码
-  -e REDIS_PASSWORD=your_password \
+  -e REDIS__PASSWORD=your_password \
   # ⚠️ 强烈建议改成你自己的随机密钥
-  -e AUTH_JWT_SECRET=9f7d3c365454dsfsasa8f28544b5e6d7a \
-  -e AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES=15 \
-  -e AUTH_REFRESH_TOKEN_EXPIRATION_DAYS=7 \
+  -e AUTH__JWT_SECRET=9f7d3c365454dsfsasa8f28544b5e6d7a \
+  -e AUTH__ACCESS_TOKEN_EXPIRATION_MINUTES=15 \
+  -e AUTH__REFRESH_TOKEN_EXPIRATION_DAYS=7 \
   # ==================== 邮件配置（可选） ====================
   # 是否启用邮件功能（用于发送验证码）
   # - false: 不启用邮件验证
   # - true: 启用邮件验证，用户注册时必须输入验证码
-  -e EMAIL_ENABLED=false \
+  -e EMAIL__ENABLED=false \
   # SMTP 服务器配置
-  -e EMAIL_SMTP_HOST=smtp.163.com \
-  -e EMAIL_SMTP_PORT=465 \
-  -e EMAIL_SMTP_USERNAME=your-email@163.com \
-  -e EMAIL_SMTP_PASSWORD=your-app-password \
+  -e EMAIL__SMTP_HOST=smtp.163.com \
+  -e EMAIL__SMTP_PORT=465 \
+  -e EMAIL__SMTP_USERNAME=your-email@163.com \
+  -e EMAIL__SMTP_PASSWORD=your-app-password \
   # 发件人信息
-  -e EMAIL_FROM_NAME="SSH Terminal" \
-  -e EMAIL_FROM_EMAIL=your-email@163.com \
+  -e EMAIL__FROM_NAME="SSH Terminal" \
+  -e EMAIL__FROM_EMAIL=your-email@163.com \
   # Worker 配置（仅异步模式使用）
-  -e EMAIL_WORKER_POOL_SIZE=10 \
-  -e EMAIL_WORKER_TIMEOUT_SECONDS=10 \
+  -e EMAIL__WORKER_POOL_SIZE=10 \
+  -e EMAIL__WORKER_TIMEOUT_SECONDS=10 \
   # ⚠️ 本机持久化目录
   -v /data/ssh-terminal-server/data:/data \
   --network ssh-terminal-net \
@@ -163,25 +163,25 @@ docker run -d \
 
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
-| `SERVER_HOST` | 服务器监听地址 | `0.0.0.0` |
-| `SERVER_PORT` | 服务器监听端口 | `3000` |
-| `DATABASE_TYPE` | 数据库类型 | `sqlite` |
-| `DATABASE_PATH` | 数据库文件路径 | `/data/app.db` |
-| `REDIS_HOST` | Redis 主机地址 | `localhost` |
-| `REDIS_PORT` | Redis 端口 | `6379` |
-| `REDIS_PASSWORD` | Redis 密码 | - |
-| `AUTH_JWT_SECRET` | JWT 签名密钥 | - |
-| `AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES` | 访问令牌过期时间（分钟） | `15` |
-| `AUTH_REFRESH_TOKEN_EXPIRATION_DAYS` | 刷新令牌过期时间（天） | `7` |
-| `EMAIL_ENABLED` | 是否启用邮件功能 | `false` |
-| `EMAIL_SMTP_HOST` | SMTP 服务器地址 | - |
-| `EMAIL_SMTP_PORT` | SMTP 服务器端口 | - |
-| `EMAIL_SMTP_USERNAME` | SMTP 用户名 | - |
-| `EMAIL_SMTP_PASSWORD` | SMTP 密码/授权码 | - |
-| `EMAIL_FROM_NAME` | 发件人名称 | `SSH Terminal` |
-| `EMAIL_FROM_EMAIL` | 发件人邮箱地址 | - |
-| `EMAIL_WORKER_POOL_SIZE` | Worker 连接池大小 | `10` |
-| `EMAIL_WORKER_TIMEOUT_SECONDS` | Worker 超时时间（秒） | `10` |
+| `SERVER__HOST` | 服务器监听地址 | `0.0.0.0` |
+| `SERVER__PORT` | 服务器监听端口 | `3000` |
+| `DATABASE__TYPE` | 数据库类型 | `sqlite` |
+| `DATABASE__PATH` | 数据库文件路径 | `/data/app.db` |
+| `REDIS__HOST` | Redis 主机地址 | `localhost` |
+| `REDIS__PORT` | Redis 端口 | `6379` |
+| `REDIS__PASSWORD` | Redis 密码 | - |
+| `AUTH__JWT_SECRET` | JWT 签名密钥 | - |
+| `AUTH__ACCESS_TOKEN_EXPIRATION_MINUTES` | 访问令牌过期时间（分钟） | `15` |
+| `AUTH__REFRESH_TOKEN_EXPIRATION_DAYS` | 刷新令牌过期时间（天） | `7` |
+| `EMAIL__ENABLED` | 是否启用邮件功能 | `false` |
+| `EMAIL__SMTP_HOST` | SMTP 服务器地址 | - |
+| `EMAIL__SMTP_PORT` | SMTP 服务器端口 | - |
+| `EMAIL__SMTP_USERNAME` | SMTP 用户名 | - |
+| `EMAIL__SMTP_PASSWORD` | SMTP 密码/授权码 | - |
+| `EMAIL__FROM_NAME` | 发件人名称 | `SSH Terminal` |
+| `EMAIL__FROM_EMAIL` | 发件人邮箱地址 | - |
+| `EMAIL__WORKER_POOL_SIZE` | Worker 连接池大小 | `10` |
+| `EMAIL__WORKER_TIMEOUT_SECONDS` | Worker 超时时间（秒） | `10` |
 
 ### 验证部署
 
