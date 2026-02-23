@@ -3,7 +3,7 @@
 //! 前端调用的 SFTP 操作命令
 
 use crate::error::Result;
-use crate::sftp::{SftpFileInfo, SftpManager};
+use crate::sftp::{SftpFileInfo, SftpManager, UploadDirectoryResult};
 use std::sync::Arc;
 use std::path::Path;
 use tauri::State;
@@ -373,4 +373,89 @@ pub async fn sftp_download_file(
 
     tracing::info!("Download completed: {} bytes", file_size);
     Ok(file_size)
+}
+
+/// 上传目录及其所有子目录和文件
+///
+/// # 参数
+/// - `manager`: SFTP Manager
+/// - `connection_id`: SSH 连接 ID
+/// - `local_dir_path`: 本地目录路径
+/// - `remote_dir_path`: 远程目录路径
+/// - `task_id`: 上传任务的唯一 ID
+/// - `window`: Tauri 窗口实例（用于发送进度事件）
+///
+/// # 返回
+/// 上传结果统计信息
+#[tauri::command]
+pub async fn sftp_upload_directory(
+    manager: State<'_, SftpManagerState>,
+    connection_id: String,
+    local_dir_path: String,
+    remote_dir_path: String,
+    task_id: String,
+    window: tauri::Window,
+) -> Result<UploadDirectoryResult> {
+    tracing::info!("=== Upload Directory Start ===");
+    tracing::info!("Task ID: {}", task_id);
+    tracing::info!("Connection ID: {}", connection_id);
+    tracing::info!("Local directory: {}", local_dir_path);
+    tracing::info!("Remote directory: {}", remote_dir_path);
+
+    // 验证本地目录是否存在
+    let local_path = Path::new(&local_dir_path);
+    if !local_path.exists() {
+        return Err(crate::error::SSHError::NotFound(
+            format!("本地目录不存在: {}", local_dir_path)
+        ));
+    }
+
+    if !local_path.is_dir() {
+        return Err(crate::error::SSHError::Io(
+            format!("路径不是目录: {}", local_dir_path)
+        ));
+    }
+
+    // 检查是否可以开始上传（并发控制）
+    if !manager.can_start_upload(&connection_id).await? {
+        return Err(crate::error::SSHError::Io("已有上传操作在进行，请等待完成".to_string()));
+    }
+
+    // 获取取消令牌
+    let cancellation_token = manager.get_cancellation_token(&connection_id).await;
+
+    // 获取 SFTP 客户端的共享引用
+    let sftp_client = manager.get_client(&connection_id).await?;
+
+    // 获取客户端的可变引用
+    let mut client_guard = sftp_client.lock().await;
+
+    // 执行上传操作
+    let result = client_guard.upload_directory_recursive(
+        &local_dir_path,
+        &remote_dir_path,
+        &window,
+        &connection_id,
+        &task_id,
+        &cancellation_token
+    ).await;
+
+    // 清理状态（无论成功或失败）
+    manager.finish_upload(&connection_id).await;
+    manager.cleanup_cancellation_token(&connection_id).await;
+
+    result
+}
+
+/// 取消上传操作
+///
+/// # 参数
+/// - `connection_id`: SSH 连接 ID
+#[tauri::command]
+pub async fn sftp_cancel_upload(
+    manager: State<'_, SftpManagerState>,
+    connection_id: String,
+) -> Result<()> {
+    tracing::info!("Cancelling upload for connection {}", connection_id);
+    manager.cancel_upload(&connection_id).await
 }

@@ -9,6 +9,9 @@ use std::path::Path;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, error, info};
 
+// 需要导入 Tauri 的 Event trait 来使用 emit 方法
+use tauri::Emitter;
+
 /// SFTP 客户端
 ///
 /// 封装 russh_sftp::client::SftpSession，提供高级文件操作
@@ -99,15 +102,35 @@ impl SftpClient {
         debug!("Creating directory: {} (recursive: {})", path, recursive);
 
         if recursive {
-            // TODO: 实现递归创建
-            // 需要逐级检查并创建父目录
+            // 递归创建父目录（使用 ensure_dir_exists 避免递归问题）
+            if let Some(parent) = Path::new(path).parent() {
+                let parent_str = parent.to_str()
+                    .ok_or_else(|| SSHError::Io("路径包含无效字符".to_string()))?;
+                
+                if !parent_str.is_empty() && parent_str != "/" {
+                    // 使用 ensure_dir_exists 递归创建父目录
+                    self.ensure_dir_exists(parent_str).await?;
+                }
+            }
         }
 
-        self.session.create_dir(path).await
-            .map_err(|e| SSHError::Ssh(format!("Failed to create directory '{}': {}", path, e)))?;
-
-        debug!("Directory created: {}", path);
-        Ok(())
+        // 尝试创建目录
+        match self.session.create_dir(path).await {
+            Ok(_) => {
+                debug!("Directory created: {}", path);
+                Ok(())
+            }
+            Err(e) => {
+                let error_msg = format!("{:?}", e);
+                // 如果目录已存在，不是错误
+                if error_msg.contains("exists") || error_msg.contains("already exists") {
+                    debug!("Directory already exists: {}", path);
+                    Ok(())
+                } else {
+                    Err(SSHError::Ssh(format!("Failed to create directory '{}': {}", path, e)))
+                }
+            }
+        }
     }
 
     /// 删除文件
@@ -385,11 +408,11 @@ impl SftpClient {
 
         // 打开本地文件
         let mut local_file = tokio::fs::File::open(local_path).await
-            .map_err(|e| SSHError::Io(format!("Failed to open local file: {}", e)))?;
+            .map_err(|e| SSHError::Io(format!("无法打开本地文件 '{:?}': {}", local_path, e)))?;
 
         // 获取文件大小
         let file_size = local_file.metadata().await
-            .map_err(|e| SSHError::Io(format!("Failed to get file metadata: {}", e)))?
+            .map_err(|e| SSHError::Io(format!("无法获取文件 '{:?}' 的元数据: {}", local_path, e)))?
             .len();
 
         // 确保父目录存在（递归创建）
@@ -448,25 +471,40 @@ impl SftpClient {
     #[allow(dead_code)]
     fn ensure_dir_exists<'a>(&'a mut self, path: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
         Box::pin(async move {
+            info!("ensure_dir_exists called with path: '{}'", path);
+
             // 尝试创建目录
             match self.session.create_dir(path).await {
                 Ok(_) => {
-                    info!("Directory created or already exists: {}", path);
+                    info!("Directory created: {}", path);
                     Ok(())
                 }
                 Err(e) => {
                     let error_msg = format!("{:?}", e);
+                    info!("create_dir failed with error: {}", error_msg);
 
-                    // 如果是"已存在"错误，那不是问题
-                    if error_msg.contains("exists") || error_msg.contains("already exists") {
-                        info!("Directory already exists: {}", path);
-                        return Ok(());
+                    // russh-sftp 在目录已存在时返回 "Failure" 错误
+                    // 我们需要先检查目录是否已存在
+                    match self.session.metadata(path).await {
+                        Ok(metadata) => {
+                            if metadata.is_dir() {
+                                info!("Directory already exists: {}", path);
+                                return Ok(());
+                            } else {
+                                // 路径存在但不是目录
+                                return Err(SSHError::Io(format!("路径 '{}' 已存在但不是目录", path)));
+                            }
+                        }
+                        Err(_) => {
+                            // 获取元数据失败，说明目录不存在，需要创建
+                        }
                     }
 
-                    // 如果是"父目录不存在"错误，递归创建父目录
+                    // 检查是否是"父目录不存在"错误
                     if error_msg.contains("No such file") {
                         if let Some(parent) = Path::new(path).parent() {
-                            let parent_str = parent.to_str().unwrap();
+                            let parent_str = parent.to_str().ok_or_else(|| SSHError::Io("路径包含无效字符".to_string()))?;
+                            info!("Parent directory parsed: '{}'", parent_str);
                             // 递归创建父目录（但不是根目录）
                             if !parent_str.is_empty() && parent_str != "/" {
                                 info!("Creating parent directory: {}", parent_str);
@@ -474,14 +512,17 @@ impl SftpClient {
 
                                 // 再次尝试创建目标目录
                                 self.session.create_dir(path).await
-                                    .map_err(|e| SSHError::Ssh(format!("Failed to create directory '{}': {}", path, e)))?;
+                                    .map_err(|e| SSHError::Ssh(format!("无法创建目录 '{}': {}", path, e)))?;
                                 return Ok(());
+                            } else {
+                                // 如果父目录为空或根目录，说明路径可能有问题
+                                info!("Parent directory is empty or root, path might be invalid: {}", path);
                             }
                         }
                     }
 
-                    // 其他错误
-                    Err(SSHError::Ssh(format!("Failed to create directory '{}': {}", path, e)))
+                    // 其他错误（包括 "Failure" 但目录不存在的情况）
+                    Err(SSHError::Ssh(format!("无法创建目录 '{}': {}", path, e)))
                 }
             }
         })
@@ -494,5 +535,244 @@ impl SftpClient {
         self.session.close().await
             .map_err(|e| SSHError::Ssh(format!("Failed to close SFTP session: {}", e)))?;
         Ok(())
+    }
+
+    /// 流式上传文件（避免一次性读取整个文件到内存）
+    ///
+    /// # 参数
+    /// - `local_path`: 本地文件路径
+    /// - `remote_path`: 远程保存路径
+    /// - `cancellation_token`: 取消令牌
+    /// - `progress_callback`: 进度回调函数 (transferred, total)
+    pub async fn upload_file_stream<F>(
+        &mut self,
+        local_path: &str,
+        remote_path: &str,
+        cancellation_token: &tokio_util::sync::CancellationToken,
+        progress_callback: F,
+    ) -> Result<u64>
+    where
+        F: Fn(u64, u64), // (transferred, total)
+    {
+        info!("Streaming upload: {} -> {}", local_path, remote_path);
+
+        // 打开本地文件
+        let mut local_file = tokio::fs::File::open(local_path).await
+            .map_err(|e| SSHError::Io(format!("无法打开本地文件 '{}': {}", local_path, e)))?;
+
+        // 获取文件大小
+        let file_size = local_file.metadata().await
+            .map_err(|e| SSHError::Io(format!("无法获取文件 '{}' 的元数据: {}", local_path, e)))?
+            .len();
+
+        // 确保父目录存在
+        let parent_dir = Path::new(remote_path).parent();
+        info!("Remote path: '{}', parent: {:?}", remote_path, parent_dir);
+
+        if let Some(parent_dir) = parent_dir {
+            let parent_str = parent_dir.to_str()
+                .ok_or_else(|| SSHError::Io("路径包含无效字符".to_string()))?;
+            info!("Parent directory string: '{}'", parent_str);
+            if !parent_str.is_empty() && parent_str != "/" {
+                self.ensure_dir_exists(parent_str).await?;
+            }
+        } else {
+            info!("No parent directory found for path: {}", remote_path);
+        }
+
+        // 创建远程文件
+        let mut remote_file = self.session.create(remote_path).await
+            .map_err(|e| SSHError::Ssh(format!("无法创建远程文件 '{}': {}", remote_path, e)))?;
+
+        // 分块读取和写入（64KB buffer）
+        let mut buffer = vec![0u8; 64 * 1024];
+        let mut transferred = 0u64;
+
+        loop {
+            // 检查是否被取消
+            if cancellation_token.is_cancelled() {
+                info!("Upload cancelled during file transfer: {}", local_path);
+                return Err(SSHError::Io("上传已取消".to_string()));
+            }
+
+            let n = local_file.read(&mut buffer).await
+                .map_err(|e| SSHError::Io(format!("无法从本地文件 '{}' 读取数据: {}", local_path, e)))?;
+
+            if n == 0 {
+                break; // EOF
+            }
+
+            // 再次检查是否被取消（在写入前）
+            if cancellation_token.is_cancelled() {
+                info!("Upload cancelled during file transfer: {}", local_path);
+                return Err(SSHError::Io("上传已取消".to_string()));
+            }
+
+            remote_file.write_all(&buffer[..n]).await
+                .map_err(|e| SSHError::Ssh(format!("无法写入远程文件 '{}': {}", remote_path, e)))?;
+
+            transferred += n as u64;
+            progress_callback(transferred, file_size);
+        }
+
+        // 确保数据刷新到服务器
+        remote_file.sync_all().await
+            .map_err(|e| SSHError::Ssh(format!("无法刷新远程文件 '{}' 到服务器: {}", remote_path, e)))?;
+
+        info!("Stream upload completed: {} bytes", transferred);
+        Ok(transferred)
+    }
+
+    /// 递归上传目录及其所有内容
+    ///
+    /// # 参数
+    /// - `local_dir`: 本地目录路径
+    /// - `remote_dir`: 远程目录路径
+    /// - `window`: Tauri 窗口实例（用于发送进度事件）
+    /// - `connection_id`: 连接 ID
+    /// - `task_id`: 上传任务的唯一 ID
+    /// - `cancellation_token`: 取消令牌
+    ///
+    /// # 返回
+    /// 上传结果统计
+    pub fn upload_directory_recursive<'a>(
+        &'a mut self,
+        local_dir: &'a str,
+        remote_dir: &'a str,
+        window: &'a tauri::Window,
+        connection_id: &'a str,
+        task_id: &'a str,
+        cancellation_token: &'a tokio_util::sync::CancellationToken,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<crate::sftp::UploadDirectoryResult>> + Send + 'a>> {
+        Box::pin(async move {
+            use crate::sftp::{UploadDirectoryResult, UploadProgressEvent};
+            use std::time::Instant;
+
+            info!("=== Recursive Directory Upload Start ===");
+            info!("Local: {}, Remote: {}", local_dir, remote_dir);
+
+            let start_time = Instant::now();
+            let mut total_files: u64 = 0;
+            let mut total_dirs: u64 = 0;
+            let mut total_size: u64 = 0;
+            let mut files_completed: u64 = 0;
+            let mut total_bytes_transferred: u64 = 0; // 修复：累计所有已传输字节数
+
+            // 第一步：统计总文件数和总大小
+            info!("Phase 1: Scanning directory structure...");
+            let mut dir_queue = vec![(local_dir.to_string(), remote_dir.to_string())];
+            let mut all_files: Vec<(String, String, u64)> = Vec::new(); // (local_path, remote_path, size)
+
+            while let Some((local_path, remote_path)) = dir_queue.pop() {
+                let mut entries = tokio::fs::read_dir(&local_path).await
+                    .map_err(|e| SSHError::Io(format!("无法读取本地目录 '{}': {}", local_path, e)))?;
+
+                while let Some(entry) = entries.next_entry().await
+                    .map_err(|e| SSHError::Io(format!("读取目录条目失败: {}", e)))? {
+
+                    let entry_path = entry.path();
+                    let entry_name = entry.file_name().to_string_lossy().to_string();
+                    let entry_type = entry.file_type().await
+                        .map_err(|e| SSHError::Io(format!("无法获取文件类型: {}", e)))?;
+
+                    if entry_type.is_dir() {
+                        let new_local = format!("{}/{}", local_path, entry_name);
+                        let new_remote = format!("{}/{}", remote_path, entry_name);
+                        dir_queue.push((new_local, new_remote));
+                        total_dirs += 1;
+                    } else if entry_type.is_file() {
+                        let metadata = entry.metadata().await
+                            .map_err(|e| SSHError::Io(format!("无法获取文件元数据: {}", e)))?;
+                        let file_size = metadata.len();
+
+                        let remote_file_path = format!("{}/{}", remote_path, entry_name);
+                        all_files.push((entry_path.to_string_lossy().to_string(), remote_file_path, file_size));
+
+                        total_files += 1;
+                        total_size += file_size;
+                    } else if entry_type.is_symlink() {
+                        // 符号链接：跳过并记录日志
+                        info!("Skipping symbolic link: {} (符号链接上传暂不支持)", entry_path.display());
+                    }
+                }
+            }
+
+            info!("Scan complete: {} files, {} directories, total size: {} bytes", total_files, total_dirs, total_size);
+
+            // 确保远程根目录存在
+            self.ensure_dir_exists(remote_dir).await?;
+
+            // 第二步：实际上传文件
+            info!("Phase 2: Uploading files...");
+            for (local_file_path, remote_file_path, _file_size) in all_files {
+                // 检查是否被取消
+                if cancellation_token.is_cancelled() {
+                    info!("Upload cancelled for connection: {}", connection_id);
+                    return Err(SSHError::Io("上传已取消".to_string()));
+                }
+
+                // 流式上传文件
+                let file_transferred = self.upload_file_stream(
+                    &local_file_path,
+                    &remote_file_path,
+                    cancellation_token,
+                    |_transferred, _total| {
+                        // 文件内进度暂不发送，只发送文件级进度
+                    }
+                ).await?;
+
+                files_completed += 1;
+                total_bytes_transferred += file_transferred; // 修复：累计字节数
+
+                // 计算传输速度（基于总传输时间）
+                let elapsed_ms = start_time.elapsed().as_millis() as u64;
+                let speed_bytes_per_sec = if elapsed_ms > 0 {
+                    (total_bytes_transferred * 1000) / elapsed_ms
+                } else {
+                    0
+                };
+
+                // 发送进度事件
+                let progress_event = UploadProgressEvent {
+                    task_id: task_id.to_string(),
+                    connection_id: connection_id.to_string(),
+                    current_file: local_file_path.clone(),
+                    current_dir: Path::new(&local_file_path)
+                        .parent()
+                        .and_then(|p| p.to_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    files_completed,
+                    total_files,
+                    bytes_transferred: total_bytes_transferred, // 修复：使用累计字节数
+                    total_bytes: total_size,
+                    speed_bytes_per_sec,
+                };
+
+                if let Err(e) = window.emit("sftp-upload-progress", &progress_event) {
+                    tracing::warn!("Failed to emit upload progress: {}", e);
+                }
+
+                info!("Uploaded {}/{} files: {} ({} bytes, {} KB/s)",
+                    files_completed, total_files,
+                    local_file_path,
+                    file_transferred,
+                    speed_bytes_per_sec / 1024
+                );
+            }
+
+            let elapsed_time = start_time.elapsed().as_millis() as u64;
+
+            info!("=== Directory Upload Complete ===");
+            info!("Files: {}, Directories: {}, Total size: {} bytes", total_files, total_dirs, total_size);
+            info!("Elapsed time: {} ms", elapsed_time);
+
+            Ok(UploadDirectoryResult {
+                total_files,
+                total_dirs,
+                total_size,
+                elapsed_time_ms: elapsed_time,
+            })
+        })
     }
 }

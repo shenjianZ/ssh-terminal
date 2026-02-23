@@ -90,3 +90,28 @@ pub struct TransferProgress {
     pub speed: u64,         // bytes/s
     pub status: TransferStatus,
 }
+
+/// 目录上传结果
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadDirectoryResult {
+    pub total_files: u64,
+    pub total_dirs: u64,
+    pub total_size: u64,
+    pub elapsed_time_ms: u64,
+}
+
+/// 上传进度事件
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadProgressEvent {
+    pub task_id: String, // 上传任务的唯一 ID，用于区分多个并发上传任务
+    pub connection_id: String,
+    pub current_file: String,
+    pub current_dir: String,
+    pub files_completed: u64,
+    pub total_files: u64,
+    pub bytes_transferred: u64,
+    pub total_bytes: u64,
+    pub speed_bytes_per_sec: u64,
+}

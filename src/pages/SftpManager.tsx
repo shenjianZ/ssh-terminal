@@ -7,16 +7,32 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Upload, Download, HardDrive } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Upload, Download, HardDrive, X, File, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
+import { Card } from '@/components/ui/card';
 import { useSessionStore } from '@/store/sessionStore';
 import { useSftpStore } from '@/store/sftpStore';
 import { toast } from 'sonner';
 import { DualPane } from '@/components/sftp/DualPane';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
+
+// 上传进度事件类型
+interface UploadProgressEvent {
+  task_id: string; // 上传任务的唯一 ID
+  connection_id: string;
+  current_file: string;
+  current_dir: string;
+  files_completed: number;
+  total_files: number;
+  bytes_transferred: number;
+  total_bytes: number;
+  speed_bytes_per_sec: number;
+}
 
 export function SftpManager() {
   const { t } = useTranslation();
@@ -37,6 +53,8 @@ export function SftpManager() {
   const [downloading, setDownloading] = useState(false);
   const [remoteRefreshKey, setRemoteRefreshKey] = useState(0);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
+  const [uploadProgressMap, setUploadProgressMap] = useState<Map<string, UploadProgressEvent>>(new Map());
+  const [uploadCancellable, setUploadCancellable] = useState(false);
 
   // 获取可用的 SSH 连接，根据 id 去重
   const availableConnections = (sessions || [])
@@ -84,6 +102,20 @@ export function SftpManager() {
       window.removeEventListener('keybinding-sftp-refresh', handleRefreshShortcut);
     };
   }, [selectedConnectionId, selectedLocalFiles, selectedRemoteFiles, localPath, remotePath]);
+
+  // 监听上传进度事件
+  useEffect(() => {
+    const unlisten = listen<UploadProgressEvent>('sftp-upload-progress', (event) => {
+      const progress = event.payload;
+      if (progress.connection_id === selectedConnectionId) {
+        setUploadProgressMap(prev => new Map(prev).set(progress.task_id, progress));
+      }
+    });
+
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, [selectedConnectionId]);
 
   const handleConnect = async (connectionId: string) => {
     playSound(SoundEffect.BUTTON_CLICK);
@@ -139,19 +171,30 @@ export function SftpManager() {
     console.log('Remote path:', remotePath);
     console.log('Connection ID:', selectedConnectionId);
 
-    setUploading(true);
-    try {
-      for (const file of selectedLocalFiles) {
-        // 跳过目录
-        if (file.isDir) {
-          toast.warning(t('sftp.error.skipDirectory', { name: file.name }));
-          continue;
-        }
+    // 分离文件和目录
+    const files: typeof selectedLocalFiles = [];
+    const directories: typeof selectedLocalFiles = [];
 
+    selectedLocalFiles.forEach(file => {
+      if (file.isDir) {
+        directories.push(file);
+      } else {
+        files.push(file);
+      }
+    });
+
+    console.log(`Found ${files.length} files and ${directories.length} directories to upload`);
+
+    setUploading(true);
+    setUploadProgressMap(new Map());
+    setUploadCancellable(directories.length > 0);
+
+    try {
+      // 上传文件
+      for (const file of files) {
         // 构建远程文件路径
         let remoteFilePath: string;
         if (remotePath === '/') {
-          // 根目录特殊处理
           remoteFilePath = `/${file.name}`;
         } else if (remotePath.endsWith('/')) {
           remoteFilePath = `${remotePath}${file.name}`;
@@ -159,10 +202,7 @@ export function SftpManager() {
           remoteFilePath = `${remotePath}/${file.name}`;
         }
 
-        console.log('Remote path:', remotePath);
-        console.log('File name:', file.name);
-        console.log('Constructed remote file path:', remoteFilePath);
-        console.log('Uploading:', file.path, '->', remoteFilePath);
+        console.log('Uploading file:', file.path, '->', remoteFilePath);
 
         await invoke('sftp_upload_file', {
           connectionId: selectedConnectionId,
@@ -171,7 +211,45 @@ export function SftpManager() {
         });
       }
 
-      toast.success(t('sftp.success.uploadSuccess', { count: selectedLocalFiles.length }));
+      // 上传目录并收集实际文件和目录数量
+      let totalFilesInDirectories = 0;
+      let totalDirsInDirectories = 0;
+      for (const dir of directories) {
+        let remoteDirPath: string;
+        if (remotePath === '/') {
+          remoteDirPath = `/${dir.name}`;
+        } else if (remotePath.endsWith('/')) {
+          remoteDirPath = `${remotePath}${dir.name}`;
+        } else {
+          remoteDirPath = `${remotePath}/${dir.name}`;
+        }
+
+        // 为每个目录生成唯一的 task_id
+        const taskId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log('Uploading directory:', dir.path, '->', remoteDirPath, 'task_id:', taskId);
+
+        // 调用目录上传命令，获取返回结果
+        const result = await invoke<{
+          totalFiles: number;
+          totalDirs: number;
+          totalSize: number;
+          elapsedTimeMs: number;
+        }>('sftp_upload_directory', {
+          connectionId: selectedConnectionId,
+          localDirPath: dir.path,
+          remoteDirPath: remoteDirPath,
+          taskId: taskId,
+        });
+
+        totalFilesInDirectories += result.totalFiles;
+        totalDirsInDirectories += result.totalDirs;
+      }
+
+      // 计算实际上传的文件和目录总数
+      const totalFiles = files.length + totalFilesInDirectories;
+      const totalDirs = directories.length + totalDirsInDirectories;
+      toast.success(`上传成功：${totalFiles} 个文件, ${totalDirs} 个目录`);
       playSound(SoundEffect.SUCCESS);
       setSelectedLocalFiles([]);
 
@@ -183,7 +261,38 @@ export function SftpManager() {
       playSound(SoundEffect.ERROR);
     } finally {
       setUploading(false);
+      setUploadProgressMap(new Map());
+      setUploadCancellable(false);
     }
+  };
+
+  const handleCancelUpload = async () => {
+    if (!selectedConnectionId) {
+      return;
+    }
+
+    try {
+      await invoke('sftp_cancel_upload', {
+        connectionId: selectedConnectionId,
+      });
+      toast.info(t('sftp.status.uploadCancelled'));
+      playSound(SoundEffect.BUTTON_CLICK);
+    } catch (error) {
+      console.error('Cancel upload failed:', error);
+      toast.error(t('sftp.error.cancelUploadFailed', { error }));
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  };
+
+  const formatSpeed = (bytesPerSec: number): string => {
+    return `${formatFileSize(bytesPerSec)}/s`;
   };
 
   const handleDownload = async () => {
@@ -332,6 +441,77 @@ export function SftpManager() {
           </div>
         </div>
       </div>
+
+      {/* 上传进度显示 */}
+      {uploadProgressMap.size > 0 && (
+        <div className="mx-4 mt-2 space-y-2">
+          {Array.from(uploadProgressMap.values()).map((progress) => (
+            <Card key={progress.task_id} className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{t('sftp.uploading')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {progress.files_completed}/{progress.total_files} {t('sftp.files')}
+                    </span>
+                    {uploadCancellable && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCancelUpload}
+                        className="h-7 px-2"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 文件计数进度 */}
+                <Progress
+                  value={(progress.files_completed / progress.total_files) * 100}
+                  className="h-2"
+                />
+
+                {/* 当前上传的文件 */}
+                <div className="flex items-start gap-2 text-sm">
+                  {progress.current_file ? (
+                    <>
+                      <File className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-mono text-xs truncate" title={progress.current_file}>
+                          {progress.current_file}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {formatFileSize(progress.bytes_transferred)} / {formatFileSize(progress.total_bytes)}
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Folder className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-mono text-xs truncate" title={progress.current_dir}>
+                          {progress.current_dir}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* 传输速度和统计信息 */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{formatSpeed(progress.speed_bytes_per_sec)}</span>
+                  <span>{((progress.files_completed / progress.total_files) * 100).toFixed(1)}%</span>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* 双面板文件管理器 */}
       {selectedConnectionId ? (

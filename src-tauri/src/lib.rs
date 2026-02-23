@@ -214,6 +214,8 @@ pub fn run() {
             commands::sftp_write_file,
             commands::sftp_download_file,
             commands::sftp_upload_file,
+            commands::sftp_upload_directory,
+            commands::sftp_cancel_upload,
             commands::local_list_dir,
             commands::local_home_dir,
             commands::local_available_drives,

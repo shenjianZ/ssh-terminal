@@ -28,6 +28,8 @@ serde_json = "1"
 
 # 异步运行时
 tokio = { version = "1.35", features = ["full", "net", "io-util"] }
+tokio-util = "0.7"
+scopeguard = "1.2"
 
 # 工具库
 anyhow = "1.0"

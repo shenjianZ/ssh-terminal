@@ -18,6 +18,10 @@ pub struct SftpManager {
     // SFTP 会话缓存: connection_id -> Arc<Mutex<SftpClient>>
     // 使用 Arc<Mutex<>> 允许在多个地方共享同一个客户端
     sessions: Arc<Mutex<HashMap<String, Arc<Mutex<SftpClient>>>>>,
+    // 取消令牌映射: connection_id -> CancellationToken
+    cancellation_tokens: Arc<Mutex<HashMap<String, tokio_util::sync::CancellationToken>>>,
+    // 上传任务映射: connection_id -> is_uploading (用于并发控制)
+    upload_tasks: Arc<Mutex<HashMap<String, bool>>>,
 }
 
 impl SftpManager {
@@ -27,6 +31,8 @@ impl SftpManager {
         Self {
             ssh_manager,
             sessions: Arc::new(Mutex::new(HashMap::new())),
+            cancellation_tokens: Arc::new(Mutex::new(HashMap::new())),
+            upload_tasks: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -203,5 +209,76 @@ impl SftpManager {
 
         info!("All {} SFTP sessions removed from cache", count);
         Ok(())
+    }
+
+    /// 获取 SFTP 客户端（返回共享引用）
+    ///
+    /// 返回 Arc<Mutex<SftpClient>> 的克隆，允许调用者共享客户端
+    /// 这是修复后的正确实现，避免所有权问题
+    pub async fn get_client(&self, connection_id: &str) -> Result<Arc<Mutex<SftpClient>>> {
+        self.get_or_create_client(connection_id).await
+    }
+
+    /// 获取或创建取消令牌
+    ///
+    /// 返回该连接的取消令牌，如果不存在则创建新的
+    pub async fn get_cancellation_token(&self, connection_id: &str) -> tokio_util::sync::CancellationToken {
+        let tokens = self.cancellation_tokens.lock().await;
+        if let Some(token) = tokens.get(connection_id) {
+            token.clone()
+        } else {
+            // 需要先释放锁才能插入
+            drop(tokens);
+            let token = tokio_util::sync::CancellationToken::new();
+            let mut tokens = self.cancellation_tokens.lock().await;
+            tokens.insert(connection_id.to_string(), token.clone());
+            token
+        }
+    }
+
+    /// 取消上传操作
+    ///
+    /// # 参数
+    /// - `connection_id`: 连接 ID
+    pub async fn cancel_upload(&self, connection_id: &str) -> Result<()> {
+        info!("Cancelling upload for connection: {}", connection_id);
+
+        let tokens = self.cancellation_tokens.lock().await;
+        if let Some(token) = tokens.get(connection_id) {
+            token.cancel();
+            info!("Cancellation token triggered for connection: {}", connection_id);
+            Ok(())
+        } else {
+            Err(SSHError::Io("没有正在进行的上传操作".to_string()))
+        }
+    }
+
+    /// 清理取消令牌
+    ///
+    /// 在上传完成或取消后调用，清理相关的取消令牌
+    pub async fn cleanup_cancellation_token(&self, connection_id: &str) {
+        let mut tokens = self.cancellation_tokens.lock().await;
+        tokens.remove(connection_id);
+    }
+
+    /// 检查是否可以开始上传（没有其他上传在进行）
+    ///
+    /// 返回 Ok(true) 表示可以开始上传，Ok(false) 表示已有上传在进行
+    pub async fn can_start_upload(&self, connection_id: &str) -> Result<bool> {
+        let mut tasks = self.upload_tasks.lock().await;
+        if tasks.contains_key(connection_id) {
+            Ok(false) // 已有上传在进行
+        } else {
+            tasks.insert(connection_id.to_string(), true);
+            Ok(true)
+        }
+    }
+
+    /// 标记上传完成
+    ///
+    /// 在上传完成或失败后调用，释放上传任务标记
+    pub async fn finish_upload(&self, connection_id: &str) {
+        let mut tasks = self.upload_tasks.lock().await;
+        tasks.remove(connection_id);
     }
 }

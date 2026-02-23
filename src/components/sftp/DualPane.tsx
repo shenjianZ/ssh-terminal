@@ -57,18 +57,27 @@ export function DualPane({ connectionId, remoteRefreshKey = 0, localRefreshKey =
 
     setUploading(true);
     try {
-      for (const file of selectedLocalFiles) {
-        // 跳过目录
-        if (file.isDir) {
-          toast.warning(t('sftp.error.skipDirectory', { name: file.name }));
-          continue;
-        }
+      // 分离文件和目录
+      const files: typeof selectedLocalFiles = [];
+      const directories: typeof selectedLocalFiles = [];
 
+      selectedLocalFiles.forEach(file => {
+        if (file.isDir) {
+          directories.push(file);
+        } else {
+          files.push(file);
+        }
+      });
+
+      console.log(`Found ${files.length} files and ${directories.length} directories to upload`);
+
+      // 上传文件
+      for (const file of files) {
         const remoteFilePath = remotePath.endsWith('/')
           ? `${remotePath}${file.name}`
           : `${remotePath}/${file.name}`;
 
-        console.log('Uploading:', file.path, '->', remoteFilePath);
+        console.log('Uploading file:', file.path, '->', remoteFilePath);
 
         await invoke('sftp_upload_file', {
           connectionId,
@@ -77,7 +86,45 @@ export function DualPane({ connectionId, remoteRefreshKey = 0, localRefreshKey =
         });
       }
 
-      toast.success(t('sftp.success.uploadSuccess', { count: selectedLocalFiles.length }));
+      // 上传目录并收集实际文件和目录数量
+      let totalFilesInDirectories = 0;
+      let totalDirsInDirectories = 0;
+      for (const dir of directories) {
+        let remoteDirPath: string;
+        if (remotePath === '/') {
+          remoteDirPath = `/${dir.name}`;
+        } else if (remotePath.endsWith('/')) {
+          remoteDirPath = `${remotePath}${dir.name}`;
+        } else {
+          remoteDirPath = `${remotePath}/${dir.name}`;
+        }
+
+        // 为每个目录生成唯一的 task_id
+        const taskId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log('Uploading directory:', dir.path, '->', remoteDirPath, 'task_id:', taskId);
+
+        // 调用目录上传命令，获取返回结果
+        const result = await invoke<{
+          totalFiles: number;
+          totalDirs: number;
+          totalSize: number;
+          elapsedTimeMs: number;
+        }>('sftp_upload_directory', {
+          connectionId,
+          localDirPath: dir.path,
+          remoteDirPath: remoteDirPath,
+          taskId: taskId,
+        });
+
+        totalFilesInDirectories += result.totalFiles;
+        totalDirsInDirectories += result.totalDirs;
+      }
+
+      // 计算实际上传的文件和目录总数
+      const totalFiles = files.length + totalFilesInDirectories;
+      const totalDirs = directories.length + totalDirsInDirectories;
+      toast.success(`上传成功：${totalFiles} 个文件, ${totalDirs} 个目录`);
       setSelectedLocalFiles([]);
 
       // 只刷新远程面板

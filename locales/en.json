@@ -692,6 +692,16 @@
       "download": "Download",
       "selectConnection": "Select Connection"
     },
+    "status": {
+      "selected": "{{count}} items selected",
+      "localFileSystem": "Local File System",
+      "remoteFileSystem": "Remote File System",
+      "uploading": "Uploading...",
+      "downloading": "Downloading...",
+      "uploadCancelled": "Upload cancelled"
+    },
+    "uploading": "Uploading",
+    "files": "files",
     "list": {
       "name": "Name",
       "size": "Size",
@@ -750,7 +760,8 @@
       "noPermission": "No permission",
       "directoryNotExists": "Directory does not exist",
       "notDirectoryShort": "Not a directory",
-      "cannotOpenDirectory": "Cannot open directory: {{error}}"
+      "cannotOpenDirectory": "Cannot open directory: {{error}}",
+      "cancelUploadFailed": "Cancel upload failed: {{error}}"
     },
     "status": {
       "selected": "{{count}} items selected",
