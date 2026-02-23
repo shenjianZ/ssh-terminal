@@ -6,7 +6,7 @@ use crate::error::Result;
 use crate::sftp::{SftpFileInfo, SftpManager, UploadDirectoryResult};
 use std::sync::Arc;
 use std::path::Path;
-use tauri::State;
+use tauri::{State, Emitter};
 
 /// SFTP Manager 状态
 pub type SftpManagerState = Arc<SftpManager>;
@@ -300,6 +300,7 @@ pub async fn local_drive_root(drive: String) -> Result<String> {
 /// - `connection_id`: SSH 连接 ID
 /// - `local_path`: 本地文件路径
 /// - `remote_path`: 远程保存路径
+/// - `window`: Tauri 窗口实例（用于发送进度事件）
 ///
 /// # 返回
 /// 传输的字节数
@@ -309,6 +310,7 @@ pub async fn sftp_upload_file(
     connection_id: String,
     local_path: String,
     remote_path: String,
+    window: tauri::Window,
 ) -> Result<u64> {
     tracing::info!("=== Upload File Start ===");
     tracing::info!("Connection ID: {}", connection_id);
@@ -324,23 +326,62 @@ pub async fn sftp_upload_file(
         return Err(crate::error::SSHError::NotFound(format!("本地文件不存在: {}", local_path)));
     }
 
-    // 读取本地文件
-    tracing::info!("Reading local file...");
-    let file_data = tokio::fs::read(&local_path).await
-        .map_err(|e| {
-            tracing::error!("Failed to read local file: {}", e);
-            crate::error::SSHError::Io(format!("无法读取本地文件: {}", e))
-        })?;
+    // 生成任务 ID
+    let task_id = format!("upload-file-{}-{}", connection_id, uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or(""));
 
-    let file_size = file_data.len() as u64;
-    tracing::info!("Local file size: {} bytes", file_size);
+    // 获取 SFTP 客户端
+    let sftp_client = manager.get_client(&connection_id).await?;
+    let mut client_guard = sftp_client.lock().await;
 
-    // 使用 SFTP manager 上传
-    tracing::info!("Starting SFTP upload...");
-    manager.write_file(&connection_id, &remote_path, file_data).await?;
+    // 获取文件大小
+    let file_size = local_path_obj.metadata()
+        .map_err(|e| crate::error::SSHError::Io(format!("无法获取文件元数据: {}", e)))?
+        .len();
 
-    tracing::info!("Upload completed: {} bytes", file_size);
-    Ok(file_size)
+    // 发送开始进度事件
+    let start_event = crate::sftp::UploadProgressEvent {
+        task_id: task_id.clone(),
+        connection_id: connection_id.clone(),
+        current_file: local_path.clone(),
+        current_dir: local_path_obj.parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string(),
+        files_completed: 0,
+        total_files: 1,
+        bytes_transferred: 0,
+        total_bytes: file_size,
+        speed_bytes_per_sec: 0,
+    };
+    let _ = window.emit("sftp-upload-progress", &start_event);
+
+    // 流式上传文件
+    let transferred = client_guard.upload_file_stream(
+        &local_path,
+        &remote_path,
+        &tokio_util::sync::CancellationToken::new(),
+        |transferred, total| {
+            // 发送进度事件
+            let progress_event = crate::sftp::UploadProgressEvent {
+                task_id: task_id.clone(),
+                connection_id: connection_id.clone(),
+                current_file: local_path.clone(),
+                current_dir: local_path_obj.parent()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+                files_completed: if transferred >= total { 1 } else { 0 },
+                total_files: 1,
+                bytes_transferred: transferred,
+                total_bytes: total,
+                speed_bytes_per_sec: 0, // 简化处理，不计算速度
+            };
+            let _ = window.emit("sftp-upload-progress", &progress_event);
+        }
+    ).await?;
+
+    tracing::info!("Upload completed: {} bytes", transferred);
+    Ok(transferred)
 }
 
 /// 下载文件（完整实现）

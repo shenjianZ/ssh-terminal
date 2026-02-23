@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { DualPane } from '@/components/sftp/DualPane';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { playSound } from '@/lib/sounds';
 import { SoundEffect } from '@/lib/sounds';
 
@@ -190,6 +191,7 @@ export function SftpManager() {
     setUploadCancellable(directories.length > 0);
 
     try {
+      const window = getCurrentWindow();
       // 上传文件
       for (const file of files) {
         // 构建远程文件路径
@@ -208,6 +210,7 @@ export function SftpManager() {
           connectionId: selectedConnectionId,
           localPath: file.path,
           remotePath: remoteFilePath,
+          window: window,
         });
       }
 
