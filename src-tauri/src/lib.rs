@@ -213,6 +213,8 @@ pub fn run() {
             commands::sftp_read_file,
             commands::sftp_write_file,
             commands::sftp_download_file,
+            commands::sftp_download_directory,
+            commands::sftp_cancel_download,
             commands::sftp_upload_file,
             commands::sftp_upload_directory,
             commands::sftp_cancel_upload,
@@ -258,6 +260,13 @@ pub fn run() {
             commands::storage_ai_config_save,
             commands::storage_ai_config_load,
             commands::storage_ai_config_get_default,
+            // 记录管理命令
+            commands::list_upload_records,
+            commands::delete_upload_record,
+            commands::clear_upload_records,
+            commands::list_download_records,
+            commands::delete_download_record,
+            commands::clear_download_records,
             // 文件系统命令
             commands::fs_write_file,
             // 认证命令

@@ -1,6 +1,7 @@
 use tauri::State;
 
 use crate::database::repositories::AppSettingsRepository;
+use crate::database::repositories::app_settings_repository::AppSettings;
 use crate::database::DbPool;
 
 /// 获取服务器地址
@@ -92,7 +93,7 @@ pub async fn app_settings_set_language(
 #[tauri::command]
 pub async fn app_settings_get_all(
     pool: State<'_, DbPool>,
-) -> Result<crate::database::repositories::AppSettings, String> {
+) -> Result<AppSettings, String> {
     let repo = AppSettingsRepository::new(pool.inner().clone());
     repo.get_all().map_err(|e| e.to_string())
 }

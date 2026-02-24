@@ -5,6 +5,8 @@ import { Terminal } from "@/pages/Terminal";
 import { SessionManager } from "@/pages/SessionManager";
 import { Settings } from "@/pages/Settings";
 import { SftpManager } from "@/pages/SftpManager";
+import { UploadRecords } from "@/pages/UploadRecords";
+import { DownloadRecords } from "@/pages/DownloadRecords";
 import { AIChatPage } from "@/pages/AIChatPage";
 import { UserProfile } from "@/pages/UserProfile";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -142,6 +144,8 @@ function AppContent() {
           <Route path="/sessions" element={<SessionManager />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/sftp" element={<SftpManager />} />
+          <Route path="/upload-records" element={<UploadRecords />} />
+          <Route path="/download-records" element={<DownloadRecords />} />
           <Route path="/user-profile" element={<UserProfile />} />
           <Route path="/ai-chat" element={<AIChatPage />} />
           <Route path="/ai-chat/:conversationId" element={<AIChatPage />} />

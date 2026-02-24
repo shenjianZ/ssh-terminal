@@ -35,6 +35,19 @@ interface UploadProgressEvent {
   speed_bytes_per_sec: number;
 }
 
+// 下载进度事件类型
+interface DownloadProgressEvent {
+  task_id: string;
+  connection_id: string;
+  current_file: string;
+  current_dir: string;
+  files_completed: number;
+  total_files: number;
+  bytes_transferred: number;
+  total_bytes: number;
+  speed_bytes_per_sec: number;
+}
+
 export function SftpManager() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -55,7 +68,9 @@ export function SftpManager() {
   const [remoteRefreshKey, setRemoteRefreshKey] = useState(0);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const [uploadProgressMap, setUploadProgressMap] = useState<Map<string, UploadProgressEvent>>(new Map());
+  const [downloadProgressMap, setDownloadProgressMap] = useState<Map<string, DownloadProgressEvent>>(new Map());
   const [uploadCancellable, setUploadCancellable] = useState(false);
+  const [downloadCancellable, setDownloadCancellable] = useState(false);
 
   // 获取可用的 SSH 连接，根据 id 去重
   const availableConnections = (sessions || [])
@@ -110,6 +125,22 @@ export function SftpManager() {
       const progress = event.payload;
       if (progress.connection_id === selectedConnectionId) {
         setUploadProgressMap(prev => new Map(prev).set(progress.task_id, progress));
+        setUploadCancellable(true);
+      }
+    });
+
+    return () => {
+      unlisten.then(fn => fn());
+    };
+  }, [selectedConnectionId]);
+
+  // 监听下载进度事件
+  useEffect(() => {
+    const unlisten = listen<DownloadProgressEvent>('sftp-download-progress', (event) => {
+      const progress = event.payload;
+      if (progress.connection_id === selectedConnectionId) {
+        setDownloadProgressMap(prev => new Map(prev).set(progress.task_id, progress));
+        setDownloadCancellable(true);
       }
     });
 
@@ -275,9 +306,20 @@ export function SftpManager() {
     }
 
     try {
-      await invoke('sftp_cancel_upload', {
-        connectionId: selectedConnectionId,
-      });
+      // 获取当前活动的任务 ID（从 uploadProgressMap 中获取第一个）
+      const activeTaskIds = Array.from(uploadProgressMap.keys());
+      if (activeTaskIds.length === 0) {
+        toast.warning('没有正在进行的上传任务');
+        return;
+      }
+
+      // 取消所有活动的上传任务
+      for (const taskId of activeTaskIds) {
+        await invoke('sftp_cancel_upload', {
+          taskId: taskId,
+        });
+      }
+
       toast.info(t('sftp.status.uploadCancelled'));
       playSound(SoundEffect.BUTTON_CLICK);
     } catch (error) {
@@ -312,13 +354,20 @@ export function SftpManager() {
 
     setDownloading(true);
     try {
-      for (const file of selectedRemoteFiles) {
-        // 跳过目录
-        if (file.isDir) {
-          toast.warning(t('sftp.error.skipDirectory', { name: file.name }));
-          continue;
-        }
+      // 分离文件和目录
+      const files: typeof selectedRemoteFiles = [];
+      const directories: typeof selectedRemoteFiles = [];
 
+      selectedRemoteFiles.forEach(file => {
+        if (file.isDir) {
+          directories.push(file);
+        } else {
+          files.push(file);
+        }
+      });
+
+      // 下载文件
+      for (const file of files) {
         const localFilePath = localPath.endsWith('\\')
           ? `${localPath}${file.name}`
           : `${localPath}\\${file.name}`;
@@ -330,7 +379,40 @@ export function SftpManager() {
         });
       }
 
-      toast.success(t('sftp.success.downloadSuccess', { count: selectedRemoteFiles.length }));
+      // 下载目录
+      let totalFilesInDirectories = 0;
+      let totalDirsInDirectories = 0;
+      for (const dir of directories) {
+        let localDirPath = localPath.endsWith('\\')
+          ? `${localPath}${dir.name}`
+          : `${localPath}\\${dir.name}`;
+
+        // 为每个目录生成唯一的 task_id
+        const taskId = `download-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        console.log('Downloading directory:', dir.path, '->', localDirPath, 'task_id:', taskId);
+
+        // 调用目录下载命令，获取返回结果
+        const result = await invoke<{
+          totalFiles: number;
+          totalDirs: number;
+          totalSize: number;
+          elapsedTimeMs: number;
+        }>('sftp_download_directory', {
+          connectionId: selectedConnectionId,
+          remoteDirPath: dir.path,
+          localDirPath: localDirPath,
+          taskId: taskId,
+        });
+
+        totalFilesInDirectories += result.totalFiles;
+        totalDirsInDirectories += result.totalDirs;
+      }
+
+      // 计算实际下载的文件和目录总数
+      const totalFiles = files.length + totalFilesInDirectories;
+      const totalDirs = directories.length + totalDirsInDirectories;
+      toast.success(`下载成功：${totalFiles} 个文件, ${totalDirs} 个目录`);
       playSound(SoundEffect.SUCCESS);
       setSelectedRemoteFiles([]);
 
@@ -342,6 +424,8 @@ export function SftpManager() {
       playSound(SoundEffect.ERROR);
     } finally {
       setDownloading(false);
+      setDownloadProgressMap(new Map());
+      setDownloadCancellable(false);
     }
   };
 

@@ -115,3 +115,28 @@ pub struct UploadProgressEvent {
     pub total_bytes: u64,
     pub speed_bytes_per_sec: u64,
 }
+
+/// 目录下载结果
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadDirectoryResult {
+    pub total_files: u64,
+    pub total_dirs: u64,
+    pub total_size: u64,
+    pub elapsed_time_ms: u64,
+}
+
+/// 下载进度事件
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgressEvent {
+    pub task_id: String, // 下载任务的唯一 ID，用于区分多个并发下载任务
+    pub connection_id: String,
+    pub current_file: String,
+    pub current_dir: String,
+    pub files_completed: u64,
+    pub total_files: u64,
+    pub bytes_transferred: u64,
+    pub total_bytes: u64,
+    pub speed_bytes_per_sec: u64,
+}

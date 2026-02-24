@@ -7,7 +7,7 @@ use crate::sftp::{SftpFileInfo};
 use russh_sftp::client::SftpSession;
 use std::path::Path;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 // 需要导入 Tauri 的 Event trait 来使用 emit 方法
 use tauri::Emitter;
@@ -544,12 +544,14 @@ impl SftpClient {
     /// - `remote_path`: 远程保存路径
     /// - `cancellation_token`: 取消令牌
     /// - `progress_callback`: 进度回调函数 (transferred, total)
+    /// - `skip_dir_check`: 是否跳过目录检查（批量上传时使用，提高性能）
     pub async fn upload_file_stream<F>(
         &mut self,
         local_path: &str,
         remote_path: &str,
         cancellation_token: &tokio_util::sync::CancellationToken,
         progress_callback: F,
+        skip_dir_check: bool,
     ) -> Result<u64>
     where
         F: Fn(u64, u64), // (transferred, total)
@@ -565,19 +567,21 @@ impl SftpClient {
             .map_err(|e| SSHError::Io(format!("无法获取文件 '{}' 的元数据: {}", local_path, e)))?
             .len();
 
-        // 确保父目录存在
-        let parent_dir = Path::new(remote_path).parent();
-        info!("Remote path: '{}', parent: {:?}", remote_path, parent_dir);
+        // 确保父目录存在（除非跳过检查）
+        if !skip_dir_check {
+            let parent_dir = Path::new(remote_path).parent();
+            info!("Remote path: '{}', parent: {:?}", remote_path, parent_dir);
 
-        if let Some(parent_dir) = parent_dir {
-            let parent_str = parent_dir.to_str()
-                .ok_or_else(|| SSHError::Io("路径包含无效字符".to_string()))?;
-            info!("Parent directory string: '{}'", parent_str);
-            if !parent_str.is_empty() && parent_str != "/" {
-                self.ensure_dir_exists(parent_str).await?;
+            if let Some(parent_dir) = parent_dir {
+                let parent_str = parent_dir.to_str()
+                    .ok_or_else(|| SSHError::Io("路径包含无效字符".to_string()))?;
+                info!("Parent directory string: '{}'", parent_str);
+                if !parent_str.is_empty() && parent_str != "/" {
+                    self.ensure_dir_exists(parent_str).await?;
+                }
+            } else {
+                info!("No parent directory found for path: {}", remote_path);
             }
-        } else {
-            info!("No parent directory found for path: {}", remote_path);
         }
 
         // 创建远程文件
@@ -702,6 +706,31 @@ impl SftpClient {
             // 确保远程根目录存在
             self.ensure_dir_exists(remote_dir).await?;
 
+            // Phase 1.5: 批量创建所有需要的目录
+            info!("Phase 1.5: Creating directory structure...");
+            let mut unique_dirs: std::collections::HashSet<String> = std::collections::HashSet::new();
+            for (_, remote_file_path, _) in &all_files {
+                if let Some(parent) = Path::new(remote_file_path).parent() {
+                    if let Some(parent_str) = parent.to_str() {
+                        if !parent_str.is_empty() && parent_str != "/" {
+                            unique_dirs.insert(parent_str.to_string());
+                        }
+                    }
+                }
+            }
+
+            // 按深度排序，先创建父目录再创建子目录
+            let mut sorted_dirs: Vec<String> = unique_dirs.into_iter().collect();
+            sorted_dirs.sort_by_key(|d| d.matches('/').count());
+
+            // 批量创建目录
+            for dir in &sorted_dirs {
+                if let Err(e) = self.ensure_dir_exists(dir).await {
+                    warn!("Failed to create directory '{}': {}", dir, e);
+                }
+            }
+            info!("Directory structure created: {} directories", sorted_dirs.len());
+
             // 第二步：实际上传文件
             info!("Phase 2: Uploading files...");
             for (local_file_path, remote_file_path, _file_size) in all_files {
@@ -711,14 +740,15 @@ impl SftpClient {
                     return Err(SSHError::Io("上传已取消".to_string()));
                 }
 
-                // 流式上传文件
+                // 流式上传文件（跳过目录检查，已在 Phase 1.5 创建）
                 let file_transferred = self.upload_file_stream(
                     &local_file_path,
                     &remote_file_path,
                     cancellation_token,
                     |_transferred, _total| {
                         // 文件内进度暂不发送，只发送文件级进度
-                    }
+                    },
+                    true, // skip_dir_check: true
                 ).await?;
 
                 files_completed += 1;
@@ -774,5 +804,232 @@ impl SftpClient {
                 elapsed_time_ms: elapsed_time,
             })
         })
+    }
+
+    /// 递归下载目录
+    ///
+    /// 分两个阶段执行：
+    /// 1. 扫描远程目录结构，收集所有文件和目录
+    /// 2. 逐个下载文件，同时创建本地目录结构
+    ///
+    /// # 参数
+    /// - `remote_dir_path`: 远程目录路径
+    /// - `local_dir_path`: 本地保存路径
+    /// - `window`: Tauri 窗口实例（用于发送进度事件）
+    /// - `connection_id`: SSH 连接 ID
+    /// - `task_id`: 下载任务的唯一 ID
+    /// - `cancellation_token`: 取消令牌
+    ///
+    /// # 返回
+    /// 下载结果统计信息
+    pub async fn download_directory_recursive<F>(
+        &mut self,
+        remote_dir_path: &str,
+        local_dir_path: &str,
+        window: &tauri::Window,
+        connection_id: &str,
+        task_id: &str,
+        cancellation_token: &tokio_util::sync::CancellationToken,
+        _progress_callback: F,
+    ) -> Result<crate::sftp::DownloadDirectoryResult>
+    where
+        F: Fn(u64, u64),
+    {
+        let start_time = std::time::Instant::now();
+        info!("=== Directory Download Start ===");
+        info!("Remote: {}, Local: {}", remote_dir_path, local_dir_path);
+        info!("Task ID: {}, Connection: {}", task_id, connection_id);
+
+        // 🔥 阶段 1: 扫描远程目录结构
+        let mut dir_queue = vec![(remote_dir_path.to_string(), local_dir_path.to_string())];
+        let mut all_files: Vec<(String, String, u64)> = Vec::new();
+        let mut total_files = 0u64;
+        let mut total_dirs = 0u64;
+        let mut total_size = 0u64;
+
+        while let Some((remote_path, local_path)) = dir_queue.pop() {
+            if cancellation_token.is_cancelled() {
+                return Err(SSHError::Io("下载已取消".to_string()));
+            }
+
+            // 列出远程目录
+            let entries = self.list_dir(&remote_path).await?;
+
+            // 创建本地目录
+            tokio::fs::create_dir_all(&local_path).await
+                .map_err(|e| SSHError::Io(format!("创建本地目录失败: {}", e)))?;
+
+            for entry in entries {
+                let entry_name = entry.name;
+                let entry_remote_path = if remote_path.ends_with('/') {
+                    format!("{}{}", remote_path, entry_name)
+                } else {
+                    format!("{}/{}", remote_path, entry_name)
+                };
+                let entry_local_path = if local_path.ends_with('/') || local_path.ends_with('\\') {
+                    format!("{}{}", local_path, entry_name)
+                } else {
+                    format!("{}{}{}", local_path, std::path::MAIN_SEPARATOR, entry_name)
+                };
+
+                if entry.is_dir {
+                    dir_queue.push((entry_remote_path, entry_local_path));
+                    total_dirs += 1;
+                } else if !entry.is_dir {
+                    all_files.push((entry_remote_path, entry_local_path, entry.size));
+                    total_files += 1;
+                    total_size += entry.size;
+                }
+            }
+        }
+
+        info!("Phase 1 complete: {} files, {} dirs, {} bytes", total_files, total_dirs, total_size);
+
+        // 🔥 阶段 2: 逐个下载文件
+        info!("Phase 2: Downloading files...");
+        let mut files_completed = 0u64;
+        let mut total_bytes_transferred = 0u64;
+
+        for (remote_file_path, local_file_path, _file_size) in all_files {
+            if cancellation_token.is_cancelled() {
+                info!("Download cancelled for task: {}", task_id);
+                return Err(SSHError::Io("下载已取消".to_string()));
+            }
+
+            // 流式下载文件
+            let file_transferred = self.download_file_stream(
+                &remote_file_path,
+                &local_file_path,
+                cancellation_token,
+                |_transferred, _total| {
+                    // 文件内进度暂不发送，只发送文件级进度
+                }
+            ).await?;
+
+            files_completed += 1;
+            total_bytes_transferred += file_transferred;
+
+            // 计算传输速度（基于总传输时间）
+            let elapsed_ms = start_time.elapsed().as_millis() as u64;
+            let speed_bytes_per_sec = if elapsed_ms > 0 {
+                (total_bytes_transferred * 1000) / elapsed_ms
+            } else {
+                0
+            };
+
+            // 发送进度事件
+            let progress_event = crate::sftp::DownloadProgressEvent {
+                task_id: task_id.to_string(),
+                connection_id: connection_id.to_string(),
+                current_file: remote_file_path.clone(),
+                current_dir: Path::new(&remote_file_path)
+                    .parent()
+                    .and_then(|p| p.to_str())
+                    .unwrap_or("")
+                    .to_string(),
+                files_completed,
+                total_files,
+                bytes_transferred: total_bytes_transferred,
+                total_bytes: total_size,
+                speed_bytes_per_sec,
+            };
+
+            if let Err(e) = window.emit("sftp-download-progress", &progress_event) {
+                tracing::warn!("Failed to emit download progress: {}", e);
+            }
+
+            info!("Downloaded {}/{} files: {} ({} bytes, {} KB/s)",
+                files_completed, total_files,
+                remote_file_path,
+                file_transferred,
+                speed_bytes_per_sec / 1024
+            );
+        }
+
+        let elapsed_time = start_time.elapsed().as_millis() as u64;
+
+        info!("=== Directory Download Complete ===");
+        info!("Files: {}, Directories: {}, Total size: {} bytes", total_files, total_dirs, total_size);
+        info!("Elapsed time: {} ms", elapsed_time);
+
+        Ok(crate::sftp::DownloadDirectoryResult {
+            total_files,
+            total_dirs,
+            total_size,
+            elapsed_time_ms: elapsed_time,
+        })
+    }
+
+    /// 流式下载文件
+    ///
+    /// 使用固定大小的缓冲区（64KB）从远程文件读取并写入本地文件
+    /// 避免一次性加载大文件到内存
+    ///
+    /// # 参数
+    /// - `remote_path`: 远程文件路径
+    /// - `local_path`: 本地保存路径
+    /// - `cancellation_token`: 取消令牌
+    /// - `progress_callback`: 进度回调函数
+    ///
+    /// # 返回
+    /// 传输的字节数
+    pub async fn download_file_stream<F>(
+        &self,
+        remote_path: &str,
+        local_path: &str,
+        cancellation_token: &tokio_util::sync::CancellationToken,
+        progress_callback: F,
+    ) -> Result<u64>
+    where
+        F: Fn(u64, u64),
+    {
+        info!("Starting file download: {} -> {}", remote_path, local_path);
+
+        // 打开远程文件
+        let mut remote_file = self.session.open(remote_path).await
+            .map_err(|e| SSHError::Ssh(format!("无法打开远程文件: {}", e)))?;
+
+        // 获取文件大小
+        let file_size = remote_file.metadata().await
+            .map_err(|e| SSHError::Ssh(format!("无法获取文件元数据: {}", e)))?
+            .size.unwrap_or(0);
+
+        // 创建本地文件
+        let mut local_file = tokio::fs::File::create(local_path).await
+            .map_err(|e| SSHError::Io(format!("无法创建本地文件: {}", e)))?;
+
+        // 流式传输（64KB 缓冲区）
+        let mut buffer = vec![0u8; 64 * 1024];
+        let mut transferred = 0u64;
+
+        loop {
+            // 检查是否被取消
+            if cancellation_token.is_cancelled() {
+                return Err(SSHError::Io("下载已取消".to_string()));
+            }
+
+            // 从远程文件读取
+            let n = remote_file.read(&mut buffer).await
+                .map_err(|e| SSHError::Ssh(format!("读取远程文件失败: {}", e)))?;
+
+            if n == 0 {
+                break; // EOF
+            }
+
+            // 写入本地文件
+            local_file.write_all(&buffer[..n]).await
+                .map_err(|e| SSHError::Io(format!("写入本地文件失败: {}", e)))?;
+
+            transferred += n as u64;
+            progress_callback(transferred, file_size);
+        }
+
+        // 确保数据刷写到磁盘
+        // 注意：russh_sftp 的 File 在 drop 时会自动关闭，无需手动调用 close()
+        local_file.sync_all().await
+            .map_err(|e| SSHError::Io(format!("同步本地文件失败: {}", e)))?;
+
+        info!("File download completed: {} bytes", transferred);
+        Ok(transferred)
     }
 }

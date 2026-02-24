@@ -329,8 +329,11 @@ pub async fn sftp_upload_file(
     // 生成任务 ID
     let task_id = format!("upload-file-{}-{}", connection_id, uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or(""));
 
-    // 获取 SFTP 客户端
-    let sftp_client = manager.get_client(&connection_id).await?;
+    // 获取取消令牌
+    let cancellation_token = manager.get_cancellation_token(&task_id).await;
+
+    // 🔥 为任务创建独立的 SFTP Client
+    let sftp_client = manager.create_task_client(&connection_id, &task_id).await?;
     let mut client_guard = sftp_client.lock().await;
 
     // 获取文件大小
@@ -356,10 +359,10 @@ pub async fn sftp_upload_file(
     let _ = window.emit("sftp-upload-progress", &start_event);
 
     // 流式上传文件
-    let transferred = client_guard.upload_file_stream(
+    let result = client_guard.upload_file_stream(
         &local_path,
         &remote_path,
-        &tokio_util::sync::CancellationToken::new(),
+        &cancellation_token,
         |transferred, total| {
             // 发送进度事件
             let progress_event = crate::sftp::UploadProgressEvent {
@@ -377,11 +380,19 @@ pub async fn sftp_upload_file(
                 speed_bytes_per_sec: 0, // 简化处理，不计算速度
             };
             let _ = window.emit("sftp-upload-progress", &progress_event);
-        }
-    ).await?;
+        },
+        false, // skip_dir_check: false（单文件上传需要检查目录）
+    ).await;
 
-    tracing::info!("Upload completed: {} bytes", transferred);
-    Ok(transferred)
+    // 🔥 清理任务 SFTP Client 和取消令牌（无论成功或失败）
+    manager.cleanup_task_client(&task_id).await;
+    manager.cleanup_cancellation_token(&task_id).await;
+
+    // 返回上传结果
+    if let Ok(transferred) = result {
+        tracing::info!("Upload completed: {} bytes", transferred);
+    }
+    result
 }
 
 /// 下载文件（完整实现）
@@ -391,6 +402,7 @@ pub async fn sftp_upload_file(
 /// - `connection_id`: SSH 连接 ID
 /// - `remote_path`: 远程文件路径
 /// - `local_path`: 本地保存路径
+/// - `window`: Tauri 窗口实例（用于发送进度事件）
 ///
 /// # 返回
 /// 传输的字节数
@@ -400,20 +412,86 @@ pub async fn sftp_download_file(
     connection_id: String,
     remote_path: String,
     local_path: String,
+    window: tauri::Window,
 ) -> Result<u64> {
-    tracing::info!("Downloading {} from connection {} to {}", remote_path, connection_id, local_path);
+    tracing::info!("=== Download File Start ===");
+    tracing::info!("Connection ID: {}", connection_id);
+    tracing::info!("Remote path: {}", remote_path);
+    tracing::info!("Local path: {}", local_path);
 
-    // 从远程读取文件
-    let file_data = manager.read_file(&connection_id, &remote_path).await?;
+    // 检查本地目录是否存在
+    let local_path_obj = std::path::Path::new(&local_path);
+    if let Some(parent_dir) = local_path_obj.parent() {
+        if !parent_dir.exists() {
+            // 尝试创建父目录
+            tokio::fs::create_dir_all(parent_dir).await
+                .map_err(|e| crate::error::SSHError::Io(format!("无法创建本地目录: {}", e)))?;
+        }
+    }
 
-    let file_size = file_data.len() as u64;
+    // 生成任务 ID
+    let task_id = format!("download-file-{}-{}", connection_id, uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or(""));
 
-    // 写入到本地文件
-    tokio::fs::write(&local_path, file_data).await
-        .map_err(|e| crate::error::SSHError::Io(format!("无法写入本地文件: {}", e)))?;
+    // 获取取消令牌
+    let cancellation_token = manager.get_cancellation_token(&task_id).await;
 
-    tracing::info!("Download completed: {} bytes", file_size);
-    Ok(file_size)
+    // 🔥 为任务创建独立的 SFTP Client
+    let sftp_client = manager.create_task_client(&connection_id, &task_id).await?;
+    let client_guard = sftp_client.lock().await;
+
+    // 提取文件名和目录信息
+    let file_name = remote_path.rsplit('/').next().unwrap_or(&remote_path).to_string();
+    let current_dir = remote_path.rsplit('/')
+        .skip(1)
+        .next()
+        .unwrap_or("")
+        .to_string();
+
+    // 发送开始进度事件
+    let start_event = crate::sftp::DownloadProgressEvent {
+        task_id: task_id.clone(),
+        connection_id: connection_id.clone(),
+        current_file: file_name.clone(),
+        current_dir: current_dir.clone(),
+        files_completed: 0,
+        total_files: 1,
+        bytes_transferred: 0,
+        total_bytes: 0, // 初始为0，会在第一次进度回调时更新
+        speed_bytes_per_sec: 0,
+    };
+    let _ = window.emit("sftp-download-progress", &start_event);
+
+    // 流式下载文件
+    let result = client_guard.download_file_stream(
+        &remote_path,
+        &local_path,
+        &cancellation_token,
+        |transferred, total| {
+            // 发送进度事件
+            let progress_event = crate::sftp::DownloadProgressEvent {
+                task_id: task_id.clone(),
+                connection_id: connection_id.clone(),
+                current_file: file_name.clone(),
+                current_dir: current_dir.clone(),
+                files_completed: if transferred >= total { 1 } else { 0 },
+                total_files: 1,
+                bytes_transferred: transferred,
+                total_bytes: total,
+                speed_bytes_per_sec: 0,
+            };
+            let _ = window.emit("sftp-download-progress", &progress_event);
+        }
+    ).await;
+
+    // 🔥 清理任务 SFTP Client 和取消令牌（无论成功或失败）
+    manager.cleanup_task_client(&task_id).await;
+    manager.cleanup_cancellation_token(&task_id).await;
+
+    // 返回下载结果
+    if let Ok(transferred) = result {
+        tracing::info!("Download completed: {} bytes", transferred);
+    }
+    result
 }
 
 /// 上传目录及其所有子目录和文件
@@ -457,18 +535,11 @@ pub async fn sftp_upload_directory(
         ));
     }
 
-    // 检查是否可以开始上传（并发控制）
-    if !manager.can_start_upload(&connection_id).await? {
-        return Err(crate::error::SSHError::Io("已有上传操作在进行，请等待完成".to_string()));
-    }
+    // 获取取消令牌（基于 task_id）
+    let cancellation_token = manager.get_cancellation_token(&task_id).await;
 
-    // 获取取消令牌
-    let cancellation_token = manager.get_cancellation_token(&connection_id).await;
-
-    // 获取 SFTP 客户端的共享引用
-    let sftp_client = manager.get_client(&connection_id).await?;
-
-    // 获取客户端的可变引用
+    // 🔥 为任务创建独立的 SFTP Client
+    let sftp_client = manager.create_task_client(&connection_id, &task_id).await?;
     let mut client_guard = sftp_client.lock().await;
 
     // 执行上传操作
@@ -481,9 +552,9 @@ pub async fn sftp_upload_directory(
         &cancellation_token
     ).await;
 
-    // 清理状态（无论成功或失败）
-    manager.finish_upload(&connection_id).await;
-    manager.cleanup_cancellation_token(&connection_id).await;
+    // 🔥 清理任务 SFTP Client 和取消令牌
+    manager.cleanup_task_client(&task_id).await;
+    manager.cleanup_cancellation_token(&task_id).await;
 
     result
 }
@@ -491,12 +562,88 @@ pub async fn sftp_upload_directory(
 /// 取消上传操作
 ///
 /// # 参数
-/// - `connection_id`: SSH 连接 ID
+/// - `task_id`: 任务 ID
 #[tauri::command]
 pub async fn sftp_cancel_upload(
     manager: State<'_, SftpManagerState>,
-    connection_id: String,
+    task_id: String,
 ) -> Result<()> {
-    tracing::info!("Cancelling upload for connection {}", connection_id);
-    manager.cancel_upload(&connection_id).await
+    tracing::info!("Cancelling upload for task {}", task_id);
+    manager.cancel_task(&task_id).await
+}
+
+/// 下载目录及其所有子目录和文件
+///
+/// # 参数
+/// - `manager`: SFTP Manager
+/// - `connection_id`: SSH 连接 ID
+/// - `remote_dir_path`: 远程目录路径
+/// - `local_dir_path`: 本地保存路径
+/// - `task_id`: 下载任务的唯一 ID
+/// - `window`: Tauri 窗口实例（用于发送进度事件）
+///
+/// # 返回
+/// 下载结果统计信息
+#[tauri::command]
+pub async fn sftp_download_directory(
+    manager: State<'_, SftpManagerState>,
+    connection_id: String,
+    remote_dir_path: String,
+    local_dir_path: String,
+    task_id: String,
+    window: tauri::Window,
+) -> Result<crate::sftp::DownloadDirectoryResult> {
+    tracing::info!("=== Download Directory Start ===");
+    tracing::info!("Task ID: {}", task_id);
+    tracing::info!("Connection ID: {}", connection_id);
+    tracing::info!("Remote directory: {}", remote_dir_path);
+    tracing::info!("Local directory: {}", local_dir_path);
+
+    // 验证本地目录父路径
+    let local_path = Path::new(&local_dir_path);
+    if let Some(parent) = local_path.parent() {
+        if !parent.exists() {
+            tokio::fs::create_dir_all(parent).await
+                .map_err(|e| crate::error::SSHError::Io(format!("创建本地父目录失败: {}", e)))?;
+        }
+    }
+
+    // 获取取消令牌（基于 task_id）
+    let cancellation_token = manager.get_cancellation_token(&task_id).await;
+
+    // 🔥 为任务创建独立的 SFTP Client
+    let sftp_client = manager.create_task_client(&connection_id, &task_id).await?;
+    let mut client_guard = sftp_client.lock().await;
+
+    // 执行下载操作
+    let result = client_guard.download_directory_recursive(
+        &remote_dir_path,
+        &local_dir_path,
+        &window,
+        &connection_id,
+        &task_id,
+        &cancellation_token,
+        |_transferred, _total| {
+            // 进度回调，暂不使用
+        }
+    ).await;
+
+    // 🔥 清理任务 SFTP Client 和取消令牌
+    manager.cleanup_task_client(&task_id).await;
+    manager.cleanup_cancellation_token(&task_id).await;
+
+    result
+}
+
+/// 取消下载操作
+///
+/// # 参数
+/// - `task_id`: 任务 ID
+#[tauri::command]
+pub async fn sftp_cancel_download(
+    manager: State<'_, SftpManagerState>,
+    task_id: String,
+) -> Result<()> {
+    tracing::info!("Cancelling download for task {}", task_id);
+    manager.cancel_task(&task_id).await
 }
