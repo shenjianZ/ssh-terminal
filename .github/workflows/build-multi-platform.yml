@@ -1,0 +1,337 @@
+name: Build Multi-Platform
+
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+        inputs:
+            linux:
+                description: "Build Linux"
+                required: false
+                default: true
+                type: boolean
+            macos:
+                description: "Build macOS (Universal)"
+                required: false
+                default: true
+                type: boolean
+            windows:
+                description: "Build Windows"
+                required: false
+                default: true
+                type: boolean
+
+jobs:
+    # ================= Linux GUI (Tauri) =================
+    build-linux:
+        if: github.event_name == 'push' || inputs.linux == true
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Install system dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y \
+                    libwebkit2gtk-4.1-dev \
+                    build-essential \
+                    curl \
+                    wget \
+                    file \
+                    libssl-dev \
+                    libayatana-appindicator3-dev \
+                    librsvg2-dev \
+                    libasound2-dev \
+                    rpm \
+                    fakeroot
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: x86_64-unknown-linux-gnu
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build Linux packages (AppImage + DEB + RPM)
+              run: pnpm tauri build --target x86_64-unknown-linux-gnu
+              env:
+                  TAURI_BUNDLE_APPIMAGE: "true"
+                  TAURI_BUNDLE_DEB: "true"
+                  TAURI_BUNDLE_RPM: "true"
+
+            - name: Upload Linux AppImage artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-linux-amd64-appimage
+                  path: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+                  retention-days: 30
+
+            - name: Upload Linux DEB artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-linux-amd64-deb
+                  path: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+                  retention-days: 30
+
+            - name: Upload Linux RPM artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-linux-x86_64-rpm
+                  path: src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm
+                  retention-days: 30
+
+    # ================= macOS GUI =================
+    build-macos:
+        if: github.event_name == 'push' || inputs.macos == true
+        runs-on: macos-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build macOS Universal Binary
+              run: pnpm tauri build --target universal-apple-darwin
+              env:
+                  TAURI_BUNDLE_DMG: "true"
+                  TAURI_BUNDLE_MACOS: "true"
+
+            - name: Upload macOS DMG artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-macos-universal-dmg
+                  path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+                  retention-days: 30
+
+            - name: Zip macOS App Bundle
+              run: |
+                  cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+                  zip -r "SSH Terminal_${{ github.ref_name }}-macos-universal.app.zip" "SSH Terminal.app"
+
+            - name: Upload macOS App Bundle artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-macos-universal-app
+                  path: src-tauri/target/universal-apple-darwin/release/bundle/macos/*.zip
+                  retention-days: 30
+
+    # ================= Windows GUI =================
+    build-windows:
+        if: github.event_name == 'push' || inputs.windows == true
+        runs-on: windows-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: x86_64-pc-windows-msvc
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build Windows (NSIS + MSI)
+              run: pnpm tauri build --target x86_64-pc-windows-msvc
+              env:
+                  TAURI_BUNDLE_NSIS: "true"
+                  TAURI_BUNDLE_MSI: "true"
+
+            - name: Upload Windows NSIS artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-windows-x64-nsis
+                  path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+
+            - name: Upload Windows MSI artifacts
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-${{ github.ref_name }}-windows-x64-msi
+                  path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+
+    # ================= Server Linux（🔥已修复 ARM64）=================
+    build-server-linux:
+        if: github.event_name == 'push' || inputs.linux == true
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+
+            # ⭐ 安装 cross（关键）
+            - name: Install cross
+              run: cargo install cross --version 0.2.5
+
+            - name: Build SSH Terminal Server (Linux x86_64)
+              run: |
+                  cd ssh-terminal-server
+                  cargo build --release --target x86_64-unknown-linux-gnu
+
+            # 🔥 ARM64 稳定构建
+            - name: Build SSH Terminal Server (Linux ARM64)
+              run: |
+                  cd ssh-terminal-server
+                  cross build --release --target aarch64-unknown-linux-gnu
+
+            - name: Package Linux x86_64 binary
+              run: |
+                  cd ssh-terminal-server/target/x86_64-unknown-linux-gnu/release
+                  tar -czf ssh-terminal-server-${{ github.ref_name }}-linux-x86_64.tar.gz ssh-terminal-server
+
+            - name: Upload Linux x86_64 binary
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-server-${{ github.ref_name }}-linux-x86_64
+                  path: ssh-terminal-server/target/x86_64-unknown-linux-gnu/release/ssh-terminal-server-${{ github.ref_name }}-linux-x86_64.tar.gz
+
+            - name: Package Linux ARM64 binary
+              run: |
+                  cd ssh-terminal-server/target/aarch64-unknown-linux-gnu/release
+                  tar -czf ssh-terminal-server-${{ github.ref_name }}-linux-arm64.tar.gz ssh-terminal-server
+
+            - name: Upload Linux ARM64 binary
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-server-${{ github.ref_name }}-linux-arm64
+                  path: ssh-terminal-server/target/aarch64-unknown-linux-gnu/release/ssh-terminal-server-${{ github.ref_name }}-linux-arm64.tar.gz
+
+    # ================= Server macOS =================
+    build-server-macos:
+        if: github.event_name == 'push' || inputs.macos == true
+        runs-on: macos-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+            - name: Build SSH Terminal Server (macOS x86_64)
+              run: |
+                  cd ssh-terminal-server
+                  cargo build --release --target x86_64-apple-darwin
+
+            - name: Build SSH Terminal Server (macOS ARM64)
+              run: |
+                  cd ssh-terminal-server
+                  cargo build --release --target aarch64-apple-darwin
+
+            - name: Create Universal Binary
+              run: |
+                  cd ssh-terminal-server
+                  lipo -create -output target/ssh-terminal-server-universal \
+                    target/x86_64-apple-darwin/release/ssh-terminal-server \
+                    target/aarch64-apple-darwin/release/ssh-terminal-server
+
+            - name: Package macOS Universal binary
+              run: |
+                  cd ssh-terminal-server/target
+                  tar -czf ssh-terminal-server-${{ github.ref_name }}-macos-universal.tar.gz ssh-terminal-server-universal
+
+            - name: Upload macOS Universal binary
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-server-${{ github.ref_name }}-macos-universal
+                  path: ssh-terminal-server/target/ssh-terminal-server-${{ github.ref_name }}-macos-universal.tar.gz
+
+    # ================= Server Windows =================
+    build-server-windows:
+        if: github.event_name == 'push' || inputs.windows == true
+        runs-on: windows-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: x86_64-pc-windows-msvc
+
+            - name: Build SSH Terminal Server (Windows x86_64)
+              run: |
+                  cd ssh-terminal-server
+                  cargo build --release --target x86_64-pc-windows-msvc
+
+            - name: Package Windows x86_64 binary
+              run: |
+                  cd ssh-terminal-server/target/x86_64-pc-windows-msvc/release
+                  Compress-Archive -Path ssh-terminal-server.exe -DestinationPath ssh-terminal-server-${{ github.ref_name }}-windows-x86_64.zip
+
+            - name: Upload Windows x86_64 binary
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ssh-terminal-server-${{ github.ref_name }}-windows-x86_64
+                  path: ssh-terminal-server/target/x86_64-pc-windows-msvc/release/ssh-terminal-server-${{ github.ref_name }}-windows-x86_64.zip
+
+    # ================= Release =================
+    release:
+        name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/')
+        needs:
+            - build-linux
+            - build-macos
+            - build-windows
+            - build-server-linux
+            - build-server-macos
+            - build-server-windows
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Download all artifacts
+              uses: actions/download-artifact@v4
+              with:
+                  path: artifacts
+
+            - name: Show artifact tree
+              run: ls -R artifacts
+
+            - name: Create or Update Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  name: SSH Terminal ${{ github.ref_name }}
+                  tag_name: ${{ github.ref_name }}
+                  generate_release_notes: true
+                  files: |
+                      artifacts/**/*
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

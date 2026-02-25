@@ -32,7 +32,7 @@ package-lock.json
 yarn.lock
 bun.lockb
 
-russh*
+
 ssh-terminal-systmssh-impl/
 xterm.js*
 .qoder

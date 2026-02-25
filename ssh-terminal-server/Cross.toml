@@ -1,0 +1,13 @@
+# Cross.toml
+
+[build]
+default-target = "aarch64-unknown-linux-gnu"
+
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:0.2.5"
+
+# 可选但强烈推荐（避免某些 crate 找不到 pkg-config）
+pre-build = [
+    "apt-get update",
+    "apt-get install -y pkg-config"
+]
