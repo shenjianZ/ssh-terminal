@@ -39,6 +39,15 @@
             "icons/128x128@2x.png",
             "icons/icon.icns",
             "icons/icon.ico"
-        ]
+        ],
+        "filename": {
+            "appimage": "SSH.Terminal_v{{version}}-linux-{{arch}}.AppImage",
+            "deb": "SSH.Terminal_v{{version}}-linux-{{arch}}.deb",
+            "rpm": "SSH.Terminal_v{{version}}-linux-{{arch}}.rpm",
+            "dmg": "SSH.Terminal_v{{version}}-macos-{{arch}}.dmg",
+            "app": "SSH.Terminal_v{{version}}-macos-{{arch}}.app",
+            "nsis": "SSH.Terminal_v{{version}}-windows-{{arch}}-setup.exe",
+            "msi": "SSH.Terminal_v{{version}}-windows-{{arch}}_en-US.msi"
+        }
     }
 }
