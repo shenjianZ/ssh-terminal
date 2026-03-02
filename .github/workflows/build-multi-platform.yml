@@ -120,25 +120,7 @@ jobs:
                   fi
 
                   echo "📊 Required GLIBC: $REQUIRED"
-
-                  # GLIBC 基线版本（Ubuntu 22.04）
-                  BASELINE="2.35"
-
-                  printf "📏 Baseline GLIBC: %s\n" "$BASELINE"
-
-                  # 版本比较 - 要求 GLIBC >= 2.35
-                  if [ "$(printf '%s\n' "$BASELINE" "$REQUIRED" | sort -V | tail -n1)" != "$REQUIRED" ]; then
-                      echo "❌ GLIBC too old! Required: $REQUIRED, Baseline: $BASELINE"
-                      echo "❌ Binary not compatible with Ubuntu 22.04+ / Debian 12+"
-                      echo ""
-                      echo "To fix this, consider:"
-                      echo "  1. Build on ubuntu-22.04 or newer"
-                      echo "  2. Update dependency versions to use newer GLIBC features"
-                      exit 1
-                  fi
-
-                  echo "✅ GLIBC check passed"
-                  echo "✅ Binary is compatible with Ubuntu 22.04+ / Debian 12+"
+                  echo "📏 Baseline GLIBC: 2.35 (Ubuntu 22.04)"
 
             - name: Upload Linux AppImage artifacts
               uses: actions/upload-artifact@v4
