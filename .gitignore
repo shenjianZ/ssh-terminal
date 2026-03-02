@@ -50,3 +50,4 @@ rustdoc*
 docs/.github
 
 bash.exe*
+ssh-terminal-docs
