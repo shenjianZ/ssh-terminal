@@ -26,7 +26,7 @@ jobs:
     # ================= Linux GUI (Tauri) =================
     build-linux:
         if: github.event_name == 'push' || inputs.linux == true
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
 
         steps:
             - name: Checkout repository
@@ -228,7 +228,7 @@ jobs:
     # ================= Server Linux（🔥已修复 ARM64）=================
     build-server-linux:
         if: github.event_name == 'push' || inputs.linux == true
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
 
         steps:
             - uses: actions/checkout@v4
@@ -356,7 +356,7 @@ jobs:
             - build-server-linux
             - build-server-macos
             - build-server-windows
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
 
         steps:
             - name: Download all artifacts
