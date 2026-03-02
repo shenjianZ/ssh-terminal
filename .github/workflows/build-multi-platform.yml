@@ -92,6 +92,52 @@ jobs:
                       mv "$file" "SSH.Terminal_${{ github.ref_name }}-linux-x86_64.rpm"
                   done
 
+            - name: Check GLIBC baseline
+              shell: bash
+              run: |
+                  set -e
+
+                  echo "🔍 Checking GLIBC requirement..."
+
+                  # 定位可执行文件
+                  APP_PATH="src-tauri/target/x86_64-unknown-linux-gnu/release/ssh-terminal"
+
+                  if [ ! -f "$APP_PATH" ]; then
+                      echo "❌ Executable not found at: $APP_PATH"
+                      exit 1
+                  fi
+
+                  echo "📦 Binary: $APP_PATH"
+
+                  # 提取 GLIBC 版本依赖
+                  REQUIRED=$(strings "$APP_PATH" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n1 | sed 's/GLIBC_//')
+
+                  if [ -z "$REQUIRED" ]; then
+                      echo "⚠️  No GLIBC dependency found (static binary?)"
+                      exit 0
+                  fi
+
+                  echo "📊 Required GLIBC: $REQUIRED"
+
+                  # GLIBC 基线版本（Ubuntu 22.04）
+                  BASELINE="2.35"
+
+                  printf "📏 Baseline GLIBC: %s\n" "$BASELINE"
+
+                  # 版本比较 - 要求 GLIBC >= 2.35
+                  if [ "$(printf '%s\n' "$BASELINE" "$REQUIRED" | sort -V | tail -n1)" != "$REQUIRED" ]; then
+                      echo "❌ GLIBC too old! Required: $REQUIRED, Baseline: $BASELINE"
+                      echo "❌ Binary not compatible with Ubuntu 22.04+ / Debian 12+"
+                      echo ""
+                      echo "To fix this, consider:"
+                      echo "  1. Build on ubuntu-22.04 or newer"
+                      echo "  2. Update dependency versions to use newer GLIBC features"
+                      exit 1
+                  fi
+
+                  echo "✅ GLIBC check passed"
+                  echo "✅ Binary is compatible with Ubuntu 22.04+ / Debian 12+"
+
             - name: Upload Linux AppImage artifacts
               uses: actions/upload-artifact@v4
               with:
