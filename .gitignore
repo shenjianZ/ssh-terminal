@@ -28,7 +28,7 @@ src-tauri/gen
 
 pnpm-lock.yaml
 !ssh-terminal-website/pnpm-lock.yaml
-package-lock.json
+
 yarn.lock
 bun.lockb
 
@@ -50,4 +50,3 @@ rustdoc*
 docs/.github
 
 bash.exe*
-ssh-terminal-docs

@@ -1,0 +1,60 @@
+{
+  "enabled": true,
+  "provider": "openai",
+  "systemPrompt": "你是一个专业的文档助手，请根据用户的问题，提供准确的答案。",
+  "models": {
+    "openai": {
+      "modelId": "gpt-3.5-turbo",
+      "apiKey": "",
+      "baseUrl": "https://api.openai.com/v1",
+      "maxTokens": 4000,
+      "temperature": 0.7
+    },
+    "claude": {
+      "modelId": "claude-3-sonnet-20240229",
+      "apiKey": "",
+      "baseUrl": "https://api.anthropic.com",
+      "maxTokens": 4000,
+      "temperature": 0.7
+    },
+    "gemini": {
+      "modelId": "gemini-pro",
+      "apiKey": "",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1",
+      "maxTokens": 4000,
+      "temperature": 0.7
+    },
+    "deepseek-v3": {
+      "modelId": "deepseek-chat",
+      "apiKey": "",
+      "baseUrl": "https://api.deepseek.com",
+      "maxTokens": 4000,
+      "temperature": 0.7
+    },
+    "deepseek-reasoner": {
+      "modelId": "deepseek-reasoner",
+      "apiKey": "",
+      "baseUrl": "https://api.deepseek.com",
+      "maxTokens": 4000,
+      "temperature": 0.7
+    },
+    "custom": {
+      "modelId": "",
+      "apiKey": "",
+      "baseUrl": "",
+      "maxTokens": 4000,
+      "temperature": 0.7
+    }
+  },
+  "features": {
+    "chatAssistant": true,
+    "documentSummary": true,
+    "codeExplanation": true,
+    "searchEnhancement": false
+  },
+  "ui": {
+    "position": "bottom-right",
+    "theme": "auto",
+    "size": "medium"
+  }
+} 

@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: ssh-terminal-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ssh_terminal_server
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ssh-terminal-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: ssh-terminal-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ssh-terminal-network
+
+  # SSH Terminal Server (Rust 后端)
+  ssh-terminal-server:
+    build:
+      context: ./ssh-terminal-server
+      dockerfile: Dockerfile
+    container_name: ssh-terminal-server
+    environment:
+      - RUST_LOG=info
+      - DATABASE_TYPE=postgresql
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_NAME=ssh_terminal_server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ssh-terminal-network
+
+  # SSH Terminal Web (Vue 3 前端)
+  ssh-terminal-web:
+    build:
+      context: ./ssh-terminal-web
+      dockerfile: Dockerfile
+    container_name: ssh-terminal-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - ssh-terminal-server
+    networks:
+      - ssh-terminal-network
+
+  # SSH Terminal Docs (React 文档站点)
+  ssh-terminal-docs:
+    build:
+      context: ./ssh-terminal-docs
+      dockerfile: Dockerfile
+    container_name: ssh-terminal-docs
+    ports:
+      - "8081:80"
+    networks:
+      - ssh-terminal-network
+
+networks:
+  ssh-terminal-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local

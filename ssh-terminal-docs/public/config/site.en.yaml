@@ -1,0 +1,185 @@
+# Website Configuration
+site:
+  title: "React Docs UI Example"
+  description: "Example documentation website built with React Docs UI"
+  # Logo formats supported:
+  # 1. emoji: "🤖"
+  # 2. image URL: "https://example.com/logo.png"
+  # 3. local image: "/images/logo.png"
+  # 4. relative path: "./assets/logo.svg"
+  logo:
+    light: "/images/favicon.svg"
+    dark: "/images/favicon-dark.svg"
+  author: "React Docs UI Team"
+  
+# Navigation Bar Configuration
+navbar:
+  showLogo: true
+  showTitle: true
+  showLanguageSwitcher: true
+  items:
+    - title: "Home"
+      link: "/"
+      active: true
+    - title: "Guide"
+      link: "/guide"
+  actions:
+    - type: "github"
+      link: "https://github.com/shenjianZ/React-docs-ui"
+      enabled: true
+
+# Sidebar Navigation Configuration
+sidebar:
+  enabled: true
+  collections:
+    guide:
+      sections:
+        - title: "Getting Started"
+          path: "/guide"
+          children:
+            - title: "Introduction"
+              path: "/guide/introduction"
+            - title: "Installation"
+              path: "/guide/installation"
+            - title: "Quick Start"
+              path: "/guide/quick-start"
+            - title: "Configuration"
+              path: "/guide/configuration"
+          
+
+# Theme Configuration
+theme:
+  # Default theme mode: 'light' | 'dark' | 'auto'
+  # light: Force light mode
+  # dark: Force dark mode
+  # auto: Follow system preference (default)
+  defaultMode: "auto"
+  
+  # Allow users to toggle theme (show theme toggle button)
+  allowToggle: true
+  
+
+# Table of Contents Configuration
+toc:
+  # Maximum heading level to display in TOC (1-6)
+  maxLevel: 3
+  
+  # Enable table of contents
+  enabled: true
+  
+  # TOC title
+  title: "On This Page" 
+
+# Footer Configuration
+footer:
+  enabled: true
+  copyright: "© 2024 React Docs UI. All rights reserved."
+  repository:
+    url: "https://github.com/shenjianZ/React-docs-ui"
+    branch: "master"
+  lastUpdated: "2025-08-14"
+  version: "v0.1.7"
+  groups:
+    - title: "Community"
+      items:
+        - title: "Discussions"
+          link: "https://github.com/shenjianZ/React-docs-ui/discussions"
+          external: true
+        - title: "Issues"
+          link: "https://github.com/shenjianZ/React-docs-ui/issues"
+          external: true
+        - title: "Contributing"
+          link: "https://github.com/shenjianZ/React-docs-ui/blob/master/CONTRIBUTING.md"
+          external: true
+        - title: "Releases"
+          link: "https://github.com/shenjianZ/React-docs-ui/releases"
+          external: true
+    - title: "Help & Support"
+      items:
+        - title: "Examples"
+          link: "/guide/quick-start"
+        - title: "Source Code"
+          link: "https://github.com/shenjianZ/React-docs-ui"
+          external: true
+        - title: "License"
+          link: "https://github.com/shenjianZ/React-docs-ui/blob/master/LICENSE"
+          external: true
+        - title: "Back to Top"
+          link: "#"
+          action: "scrollTop"
+  social:
+    - name: "email"
+      url: "mailto:contact@example.com"
+      icon: "mail"
+    - name: "github"
+      link: "https://github.com/shenjianZ/React-docs-ui"
+      icon: "github"
+    # - name: "youtube"
+    #   url: "https://youtube.com/@yourhandle"
+    #   icon: "youtube"
+    # - name: "twitter"
+    #   url: "https://twitter.com/yourhandle"
+    #   icon: "twitter"
+    # - name: "discord"
+    #   url: "https://discord.gg/yourinvite"
+    #   icon: "discord"
+    # - name: "telegram"
+    #   url: "https://t.me/yourhandle"
+    #   icon: "telegram"
+    # - name: "tiktok"
+    #   url: "https://tiktok.com/@yourhandle"
+    #   icon: "tiktok"
+    - name: "bilibili"
+      url: "https://space.bilibili.com/your_bilibili_id"
+      icon: "bilibili"
+    - name: "qq"
+      url: "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=your_qq_id&card_type=person&source=qrcode"
+      icon: "qq"
+    - name: "wechat"
+      url: "weixin://dl/add?your_wechat_id"
+      icon: "wechat"
+    # - name: "weibo"
+    #   url: "https://weibo.com/yourhandle"
+    #   icon: "weibo"
+    # - name: "douyin"
+    #   url: "https://www.douyin.com/user/yourhandle"
+    #   icon: "douyin"
+    # - name: "zhihu"
+    #   url: "https://www.zhihu.com/people/yourhandle"
+    #   icon: "zhihu" 
+
+# PWA Configuration
+pwa:
+  enabled: false
+  name: "React Docs UI"
+  shortName: "ReactDocsUI"
+  description: "Beautiful documentation websites made simple"
+  themeColor: "#ffffff"
+  backgroundColor: "#ffffff"
+
+# Context Menu Configuration
+contextMenu:
+  # Global switch, set to false to completely disable context menu
+  enabled: true
+
+  # Page group menu items configuration
+  page:
+    copyUrl: true          # Copy current URL
+    copyTitle: false       # Copy page title
+    copyMarkdownLink: true # Copy Markdown link
+    openInNewTab: false    # Open in new tab
+    reload: true           # Refresh
+    printPage: true        # Print page
+    scrollToTop: true      # Scroll to top
+    scrollToBottom: true   # Scroll to bottom
+
+  # Site group menu items configuration
+  site:
+    goHome: true    # Go to home
+    quickNav: false # Quick navigation
+    language: false # Language switch
+
+  # Appearance group menu items configuration
+  appearance:
+    theme: false          # Theme switch
+    resetThemePref: false # Reset theme preference 

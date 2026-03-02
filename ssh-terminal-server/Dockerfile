@@ -1,15 +1,12 @@
-# 构建阶段
-FROM rust:1.83-alpine AS builder
-
-# 安装构建依赖
-RUN apk add --no-cache \
-    musl-dev \
-    pkgconf \
-    openssl-dev \
-    postgresql-dev
+# ========================================
+# 构建阶段 - 使用 muslrust 静态链接
+# ========================================
+# 参考 build-musl.sh 脚本，使用 muslrust 镜像构建静态链接的二进制文件
+# 支持 linux/amd64 和 linux/arm64 多架构
+FROM registry.cn-hangzhou.aliyuncs.com/pull-image/muslrust:latest AS builder
 
 # 设置工作目录
-WORKDIR /app
+WORKDIR /volume
 
 # 复制 Cargo 文件
 COPY Cargo.toml Cargo.lock ./
@@ -23,46 +20,36 @@ RUN mkdir src && \
 # 复制源代码
 COPY src ./src
 
-# 构建应用
+# 构建静态链接的二进制文件
+# muslrust 镜像已经配置好静态链接环境
 RUN cargo build --release
 
-# 运行阶段
-FROM alpine:3.20
+# ========================================
+# 运行阶段 - 使用 scratch 最小化镜像
+# ========================================
+FROM scratch
 
-# 安装运行时依赖
-RUN apk add --no-cache \
-    ca-certificates \
-    tzdata
-
-# 设置时区为上海
-ENV TZ=Asia/Shanghai
-
-# 创建非 root 用户
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
-
-# 设置工作目录
-WORKDIR /app
-
-# 从构建阶段复制二进制文件
-COPY --from=builder /app/target/release/ssh-terminal-server /app/ssh-terminal-server
-
-# 复制配置文件
-COPY config ./config
-
-# 创建数据目录
-RUN mkdir -p /app/data && \
-    chown -R appuser:appuser /app
-
-# 切换到非 root 用户
-USER appuser
+# 复制静态链接的二进制文件
+COPY --from=builder /volume/target/x86_64-unknown-linux-musl/release/ssh-terminal-server /ssh-terminal-server
 
 # 暴露端口
 EXPOSE 3000
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+# 设置环境变量（默认值，可被 docker run -e 覆盖）
+ENV DATABASE_TYPE=postgresql \
+    DATABASE_HOST=localhost \
+    DATABASE_PORT=5432 \
+    DATABASE_USER=postgres \
+    DATABASE_PASSWORD=changeme \
+    DATABASE_DATABASE=ssh_terminal_server \
+    REDIS_HOST=localhost \
+    REDIS_PORT=6379 \
+    REDIS_PASSWORD=changeme \
+    JWT_SECRET=changeme_please_modify_in_production \
+    APP_ENV=production \
+    RUST_LOG=info \
+    TZ=Asia/Shanghai
 
-# 运行应用
-CMD ["./ssh-terminal-server", "-e", "production"]
+# 运行二进制文件
+ENTRYPOINT ["/ssh-terminal-server"]
+CMD ["-e", "production"]
