@@ -16,12 +16,12 @@ RUN pnpm install --frozen-lockfile
 # 复制源代码
 COPY . .
 
-# 构建参数：支持在构建时传入 API_BASE_URL
-ARG API_BASE_URL=
+# 构建参数：支持在构建时传入 VITE_API_BASE_URL
+ARG VITE_API_BASE_URL=
 
-# 如果提供了 API_BASE_URL，则覆盖 .env.production
-RUN if [ -n "$API_BASE_URL" ]; then \
-      echo "API_BASE_URL=$API_BASE_URL" > .env.production; \
+# 如果提供了 VITE_API_BASE_URL，则覆盖 .env.production
+RUN if [ -n "$VITE_API_BASE_URL" ]; then \
+      echo "VITE_API_BASE_URL=$VITE_API_BASE_URL" > .env.production; \
     fi
 
 # 构建生产版本
