@@ -23,8 +23,8 @@ export const useLastUpdateStore = defineStore('lastUpdate', () => {
         hasData.value = response.data.has_data
 
         if (response.data.last_updated_at > 0) {
-          // 将时间戳转换为本地时间字符串
-          lastUpdatedTime.value = new Date(response.data.last_updated_at).toLocaleString()
+          // 将 Unix 秒级时间戳转换为毫秒级，然后转换为本地时间字符串
+          lastUpdatedTime.value = new Date(response.data.last_updated_at * 1000).toLocaleString()
         } else {
           lastUpdatedTime.value = '-'
         }
@@ -42,7 +42,8 @@ export const useLastUpdateStore = defineStore('lastUpdate', () => {
    */
   function formatLastUpdate(timestamp: number): string {
     if (timestamp <= 0) return '-'
-    return new Date(timestamp).toLocaleString()
+    // 将 Unix 秒级时间戳转换为毫秒级
+    return new Date(timestamp * 1000).toLocaleString()
   }
 
   return {

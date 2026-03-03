@@ -1,68 +1,105 @@
-# 构建阶段
-FROM rust:1.83-alpine AS builder
+# syntax=docker/dockerfile:1.7
 
-# 安装构建依赖
-RUN apk add --no-cache \
-    musl-dev \
-    pkgconf \
-    openssl-dev \
-    postgresql-dev
+# ==============================================================================
+# 1. 基础构建环境 (Base)
+# ==============================================================================
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-bookworm-slim AS base
 
-# 设置工作目录
-WORKDIR /app
+# 引入 xx 交叉编译辅助工具
+COPY --from=tonistiigi/xx:1.4.0 / /
 
-# 复制 Cargo 文件
-COPY Cargo.toml Cargo.lock ./
-
-# 创建一个虚拟的 main.rs 来预编译依赖
-RUN mkdir src && \
-    echo "fn main() {}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-# 复制源代码
-COPY src ./src
-
-# 构建应用
-RUN cargo build --release
-
-# 运行阶段
-FROM alpine:3.20
-
-# 安装运行时依赖
-RUN apk add --no-cache \
+# 基础工具
+RUN apt-get update && apt-get install -y \
+    clang \
+    lld \
+    pkg-config \
+    git \
+    file \
     ca-certificates \
-    tzdata
+    && rm -rf /var/lib/apt/lists/*
 
-# 设置时区为上海
-ENV TZ=Asia/Shanghai
+# cargo-chef（缓存神器）
+RUN cargo install cargo-chef
 
-# 创建非 root 用户
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
-
-# 设置工作目录
 WORKDIR /app
 
-# 从构建阶段复制二进制文件
-COPY --from=builder /app/target/release/ssh-terminal-server /app/ssh-terminal-server
+# ==============================================================================
+# 2. Planner
+# ==============================================================================
+FROM base AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
-# 复制配置文件
-COPY config ./config
+# ==============================================================================
+# 3. Builder - Deps（🔥 关键修复点）
+# ==============================================================================
+FROM base AS builder-deps
 
-# 创建数据目录
-RUN mkdir -p /app/data && \
-    chown -R appuser:appuser /app
+ARG TARGETPLATFORM
 
-# 切换到非 root 用户
-USER appuser
+# ⭐⭐⭐ 关键：安装目标架构 sysroot
+RUN xx-apt-get update && xx-apt-get install -y \
+    libc6-dev \
+    libssl-dev \
+    libgcc-s1 \
+    gcc \
+    pkg-config
 
-# 暴露端口
-EXPOSE 3000
+# ⭐⭐⭐ 确保交叉环境变量正确（很重要）
+RUN xx-info env
 
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+COPY --from=planner /app/recipe.json recipe.json
 
-# 运行应用
-CMD ["./ssh-terminal-server", "-e", "production"]
+# 构建依赖缓存
+RUN xx-cargo chef cook --release --recipe-path recipe.json
+
+# ==============================================================================
+# 4. Builder - Source（🔥 同样要有 sysroot）
+# ==============================================================================
+FROM base AS builder-src
+
+ARG TARGETPLATFORM
+ARG BIN_NAME=ssh-terminal-server
+
+# ⭐⭐⭐ 再装一次目标库（避免 layer 隔离导致链接失败）
+RUN xx-apt-get update && xx-apt-get install -y \
+    libc6-dev \
+    libssl-dev \
+    libgcc-s1 \
+    gcc \
+    pkg-config
+
+RUN xx-info env
+
+# 恢复依赖缓存
+COPY --from=builder-deps /app/target target
+COPY --from=builder-deps /usr/local/cargo /usr/local/cargo
+
+# 复制源码
+COPY . .
+
+# 构建
+RUN xx-cargo build --release --locked --bin ${BIN_NAME} && \
+    cp target/$(xx-cargo --print-target-triple)/release/${BIN_NAME} /app/server-binary && \
+    xx-verify /app/server-binary
+
+# ==============================================================================
+# 5. Runtime
+# ==============================================================================
+FROM debian:bookworm-slim
+
+ARG BIN_NAME=ssh-terminal-server
+
+WORKDIR /app
+
+# 只保留运行时依赖（最小化）
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /app/bin
+
+COPY --from=builder-src /app/server-binary /app/bin/${BIN_NAME}
+
+ENTRYPOINT ["/app/bin/ssh-terminal-server"]

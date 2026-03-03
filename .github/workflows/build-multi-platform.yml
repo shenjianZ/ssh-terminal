@@ -26,7 +26,7 @@ jobs:
     # ================= Linux GUI (Tauri) =================
     build-linux:
         if: github.event_name == 'push' || inputs.linux == true
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
 
         steps:
             - name: Checkout repository
@@ -36,15 +36,17 @@ jobs:
               run: |
                   sudo apt-get update
                   sudo apt-get install -y \
-                    libwebkit2gtk-4.0-dev \
-                    build-essential \
-                    curl \
-                    wget \
-                    file \
-                    libssl-dev \
+                    libwebkit2gtk-4.1-dev \
+                    libgtk-3-dev \
+                    libsoup-3.0-dev \
                     libayatana-appindicator3-dev \
                     librsvg2-dev \
                     libasound2-dev \
+                    build-essential \
+                    pkg-config \
+                    curl \
+                    wget \
+                    file \
                     rpm \
                     fakeroot
 
@@ -91,6 +93,34 @@ jobs:
                   for file in *.rpm; do
                       mv "$file" "SSH.Terminal_${{ github.ref_name }}-linux-x86_64.rpm"
                   done
+
+            - name: Check GLIBC baseline
+              shell: bash
+              run: |
+                  set -e
+
+                  echo "🔍 Checking GLIBC requirement..."
+
+                  # 定位可执行文件
+                  APP_PATH="src-tauri/target/x86_64-unknown-linux-gnu/release/ssh-terminal"
+
+                  if [ ! -f "$APP_PATH" ]; then
+                      echo "❌ Executable not found at: $APP_PATH"
+                      exit 1
+                  fi
+
+                  echo "📦 Binary: $APP_PATH"
+
+                  # 提取 GLIBC 版本依赖
+                  REQUIRED=$(strings "$APP_PATH" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n1 | sed 's/GLIBC_//')
+
+                  if [ -z "$REQUIRED" ]; then
+                      echo "⚠️  No GLIBC dependency found (static binary?)"
+                      exit 0
+                  fi
+
+                  echo "📊 Required GLIBC: $REQUIRED"
+                  echo "📏 Baseline GLIBC: 2.35 (Ubuntu 22.04)"
 
             - name: Upload Linux AppImage artifacts
               uses: actions/upload-artifact@v4
@@ -228,7 +258,7 @@ jobs:
     # ================= Server Linux（🔥已修复 ARM64）=================
     build-server-linux:
         if: github.event_name == 'push' || inputs.linux == true
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
 
         steps:
             - uses: actions/checkout@v4
@@ -356,7 +386,7 @@ jobs:
             - build-server-linux
             - build-server-macos
             - build-server-windows
-        runs-on: ubuntu-20.04
+        runs-on: ubuntu-22.04
 
         steps:
             - name: Download all artifacts

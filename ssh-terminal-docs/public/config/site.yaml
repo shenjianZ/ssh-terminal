@@ -1,0 +1,199 @@
+# 网站基本配置
+site:
+    title: "SSH Terminal"
+    description: "跨平台桌面 SSH 终端管理工具，支持 AI 智能助手、SFTP 文件管理、云同步等功能"
+    logo:
+        light: "/images/favicon.svg"
+        dark: "/images/favicon-dark.svg"
+    author: "shenjianZ"
+
+# 顶部导航配置
+navbar:
+    showLogo: true
+    showTitle: true
+    showLanguageSwitcher: true
+    items:
+        - title: "首页"
+          link: "/"
+          active: true
+        - title: "文档"
+          link: "/docs"
+    actions:
+        - type: "github"
+          link: "https://github.com/shenjianZ/ssh-terminal"
+          enabled: true
+
+# 侧边栏导航配置
+sidebar:
+    enabled: true
+    collections:
+        docs:
+            sections:
+                - title: "概览与入门"
+                  path: "/docs/start"
+                  children:
+                      - title: "项目介绍"
+                        path: "/docs/start/introduction"
+                      - title: "核心特性"
+                        path: "/docs/start/features"
+                      - title: "安装指南"
+                        path: "/docs/start/installation"
+                      - title: "快速开始"
+                        path: "/docs/start/quick-start"
+                - title: "教程与指南"
+                  path: "/docs/guide"
+                  children:
+                      - title: "基础教程"
+                        path: "/docs/guide/basics"
+                      - title: "SSH 连接管理"
+                        path: "/docs/guide/ssh-connection"
+                      - title: "AI 智能助手"
+                        path: "/docs/guide/ai-assistant"
+                      - title: "SFTP 文件管理"
+                        path: "/docs/guide/sftp"
+                      - title: "云同步功能"
+                        path: "/docs/guide/cloud-sync"
+                - title: "快速部署"
+                  path: "/docs/config"
+                  children:
+                      - title: "环境变量"
+                        path: "/docs/config/env"
+                      - title: "部署指南"
+                        path: "/docs/config/deployment"
+                - title: "贡献者指南"
+                  path: "/docs/contributing"
+                  children:
+                      - title: "环境搭建"
+                        path: "/docs/contributing/setup"
+                      - title: "代码规范"
+                        path: "/docs/contributing/code-style"
+                      - title: "测试指南"
+                        path: "/docs/contributing/testing"
+                      - title: "提交流程"
+                        path: "/docs/contributing/pr-flow"
+                - title: "常见问题与支持"
+                  path: "/docs/support"
+                  children:
+                      - title: "FAQ"
+                        path: "/docs/support/faq"
+                      - title: "故障排除"
+                        path: "/docs/support/troubleshooting"
+                      - title: "生态系统"
+                        path: "/docs/support/ecosystem"
+                - title: "项目元信息"
+                  path: "/docs/meta"
+                  children:
+                      - title: "更新日志"
+                        path: "/docs/meta/changelog"
+                      - title: "路线图"
+                        path: "/docs/meta/roadmap"
+                      - title: "许可证"
+                        path: "/docs/meta/license"
+
+# Theme Configuration
+theme:
+    # Default theme mode: 'light' | 'dark' | 'auto'
+    # light: Force light mode
+    # dark: Force dark mode
+    # auto: Follow system preference (default)
+    defaultMode: "auto"
+
+    # Allow users to toggle theme (show theme toggle button)
+    allowToggle: true
+
+# Table of Contents Configuration
+toc:
+    # Maximum heading level to display in TOC (1-6)
+    maxLevel: 3
+
+    # Enable table of contents
+    enabled: true
+
+    # TOC title
+    title: "本页目录"
+
+# Footer Configuration
+footer:
+    enabled: true
+    copyright: "© 2026 SSH Terminal. All rights reserved."
+    repository:
+        url: "https://github.com/shenjianZ/ssh-terminal"
+        branch: "master"
+    lastUpdated: "2026-02-28"
+    version: "v1.2.0"
+    groups:
+        - title: "社区"
+          items:
+              - title: "讨论区"
+                link: "https://github.com/shenjianZ/ssh-terminal/discussions"
+                external: tr
+              - title: "问题反馈"
+                link: "https://github.com/shenjianZ/ssh-terminal/issues"
+                external: true
+              - title: "贡献指南"
+                link: "https://github.com/shenjianZ/ssh-terminal/blob/master/CONTRIBUTING.md"
+                external: true
+              - title: "版本发布"
+                link: "https://github.com/shenjianZ/ssh-terminal/releases"
+                external: true
+        - title: "帮助支持"
+          items:
+              - title: "快速开始"
+                link: "/docs/quick-start"
+              - title: "源代码"
+                link: "https://github.com/shenjianZ/ssh-terminal"
+                external: true
+              - title: "开源许可"
+                link: "https://github.com/shenjianZ/ssh-terminal/blob/master/LICENSE"
+                external: true
+              - title: "回到顶部"
+                link: "#"
+                action: "scrollTop"
+    links:
+        - title: "文档"
+          link: "/docs/introduction"
+        - title: "GitHub"
+          link: "https://github.com/shenjianZ/ssh-terminal"
+          external: true
+        - title: "License"
+          link: "/meta/license"
+    social:
+        - name: "github"
+          url: "https://github.com/shenjianZ/ssh-terminal"
+          icon: "github"
+
+# PWA Configuration
+pwa:
+    enabled: true
+    name: "SSH Terminal"
+    shortName: "SSHTerm"
+    description: "跨平台桌面 SSH 终端管理工具"
+    themeColor: "#ffffff"
+    backgroundColor: "#ffffff"
+
+# 右键菜单配置
+contextMenu:
+    # 全局开关，false 则完全禁用右键菜单
+    enabled: true
+
+    # 页面组菜单项配置
+    page:
+        copyUrl: true # 复制当前链接
+        copyTitle: false # 复制页面标题
+        copyMarkdownLink: true # 复制 Markdown 链接
+        openInNewTab: false # 在新标签页打开
+        reload: true # 刷新
+        printPage: true # 打印页面
+        scrollToTop: true # 回到顶部
+        scrollToBottom: true # 滚动到底部
+
+    # 站点组菜单项配置
+    site:
+        goHome: true # 返回首页
+        quickNav: false # 快速跳转
+        language: false # 语言切换
+
+    # 外观组菜单项配置
+    appearance:
+        theme: false # 主题切换
+        resetThemePref: false # 重置主题偏好

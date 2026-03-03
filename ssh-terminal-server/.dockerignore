@@ -4,7 +4,7 @@ target/
 *.pdb
 
 # 文档
-docs/
+
 *.md
 !README.md
 
@@ -42,3 +42,9 @@ docker-compose.yml
 .env.*
 *.toml.example
 build-musl.sh
+
+
+docs/api
+docs/development
+docs/deployment
+docs/README.md

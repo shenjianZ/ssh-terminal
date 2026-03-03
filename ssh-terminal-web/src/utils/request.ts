@@ -2,8 +2,8 @@ import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestCo
 import { storage } from './storage'
 import type { ApiResponse } from '@/types'
 
-// API 基础 URL
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+// 获取 API_BASE_URL，如果没有设置则使用空字符串（相对路径）
+const BASE_URL = import.meta.env.API_BASE_URL || ''
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({

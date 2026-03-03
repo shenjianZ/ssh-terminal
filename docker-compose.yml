@@ -1,0 +1,81 @@
+services:
+    # Redis 缓存
+    redis:
+        image: registry.cn-hangzhou.aliyuncs.com/pull-image/redis:7-alpine
+        container_name: ssh-terminal-redis
+        ports:
+            - "6379:6379"
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+        networks:
+            - ssh-terminal-network
+
+    # SSH Terminal Server (Rust 后端)
+    ssh-terminal-server:
+        image: registry.cn-hangzhou.aliyuncs.com/pull-image/ssh-terminal-server:latest
+        container_name: ssh-terminal-server
+        environment:
+            - SERVER__HOST=0.0.0.0
+            - SERVER__PORT=3000
+            - DATABASE__TYPE=sqlite
+            - DATABASE__PATH=/data/app.db
+            - REDIS__HOST=redis
+            - REDIS__PORT=6379
+            - REDIS__PASSWORD=
+            - AUTH__JWT_SECRET=your_jwt_secret_key_here_change_this_in_production
+            - AUTH__ACCESS_TOKEN_EXPIRATION_MINUTES=15
+            - AUTH__REFRESH_TOKEN_EXPIRATION_DAYS=7
+            - EMAIL__ENABLED=false
+            - EMAIL__SMTP_HOST=smtp.example.com
+            - EMAIL__SMTP_PORT=465
+            - EMAIL__SMTP_USERNAME=your_email@example.com
+            - EMAIL__SMTP_PASSWORD=your_email_password_here
+            - EMAIL__FROM_NAME=SSH Terminal
+            - EMAIL__FROM_EMAIL=your_email@example.com
+            - EMAIL__WORKER_POOL_SIZE=5
+            - EMAIL__WORKER_TIMEOUT_SECONDS=10
+        ports:
+            - "7213:3000"
+        volumes:
+            - sqlite-data:/data
+        depends_on:
+            redis:
+                condition: service_healthy
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+        networks:
+            - ssh-terminal-network
+
+    # SSH Terminal Web (Vue 3 前端)
+    ssh-terminal-web:
+        image: registry.cn-hangzhou.aliyuncs.com/pull-image/ssh-terminal-web:latest
+        container_name: ssh-terminal-web
+        ports:
+            - "7214:80"
+        depends_on:
+            - ssh-terminal-server
+        networks:
+            - ssh-terminal-network
+
+    # SSH Terminal Docs (React 文档站点)
+    ssh-terminal-docs:
+        image: registry.cn-hangzhou.aliyuncs.com/pull-image/ssh-terminal-docs:latest
+        container_name: ssh-terminal-docs
+        ports:
+            - "7215:80"
+        networks:
+            - ssh-terminal-network
+
+networks:
+    ssh-terminal-network:
+        driver: bridge
+
+volumes:
+    sqlite-data:
+        driver: local

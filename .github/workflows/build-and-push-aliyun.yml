@@ -1,0 +1,257 @@
+name: Build and Push to Aliyun ACR
+
+on:
+    push:
+        tags:
+            - "v*"
+    workflow_dispatch:
+        inputs:
+            server:
+                description: "Build SSH Terminal Server"
+                required: false
+                default: true
+                type: boolean
+            web:
+                description: "Build SSH Terminal Web"
+                required: false
+                default: true
+                type: boolean
+            docs:
+                description: "Build SSH Terminal Docs"
+                required: false
+                default: true
+                type: boolean
+
+env:
+    REGISTRY: ${{ secrets.ALIYUN_REGISTRY }}
+    NAMESPACE: ${{ secrets.ALIYUN_NAME_SPACE }}
+    ALIYUN_REGISTRY_USER: ${{ secrets.ALIYUN_REGISTRY_USER }}
+    ALIYUN_REGISTRY_PASSWORD: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
+
+# ============================================================
+# 🟢 SSH Terminal Server
+# ============================================================
+jobs:
+    build-server:
+        if: github.event_name == 'push' || inputs.server == true
+        runs-on: ubuntu-latest
+
+        steps:
+            # 🧹 最大化磁盘
+            - name: Maximize build space
+              uses: easimon/maximize-build-space@v10
+              with:
+                  root-reserve-mb: 1024
+                  swap-size-mb: 1024
+                  remove-dotnet: "true"
+                  remove-haskell: "true"
+                  remove-android: "true"
+                  remove-codeql: "true"
+                  build-mount-path: "/var/lib/docker"
+
+            - name: Restart docker
+              run: sudo service docker restart
+
+            # 🧼 额外清理（防止历史残留爆盘）
+            - name: Extra cleanup
+              run: |
+                  docker system prune -af || true
+                  docker buildx prune -af || true
+
+            # 📥 Checkout
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # 🧠 精简 QEMU（关键优化）
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+              with:
+                  platforms: amd64,arm64
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            # 🔐 登录 ACR
+            - name: Login to Aliyun ACR
+              run: |
+                  set -euo pipefail
+                  echo "$ALIYUN_REGISTRY_PASSWORD" | docker login \
+                    --username "$ALIYUN_REGISTRY_USER" \
+                    --password-stdin "$REGISTRY"
+
+            # 🏷️ 镜像标签
+            - name: Prepare image tags
+              id: prep-server
+              run: |
+                  set -euo pipefail
+                  IMAGE=${REGISTRY}/${NAMESPACE}/ssh-terminal-server
+                  VERSION=${GITHUB_REF_NAME}
+                  echo "image=$IMAGE" >> $GITHUB_OUTPUT
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            # 🚀 构建 + 推送（🔥 带缓存）
+            - name: Build and Push Server
+              run: |
+                  set -euo pipefail
+                  docker buildx build \
+                    --platform linux/amd64,linux/arm64 \
+                    --provenance=false \
+                    --cache-from=type=gha,scope=server  \
+                    --cache-to=type=gha,mode=max,scope=server \
+                    -t ${{ steps.prep-server.outputs.image }}:${{ steps.prep-server.outputs.version }} \
+                    -t ${{ steps.prep-server.outputs.image }}:latest \
+                    --push \
+                    ./ssh-terminal-server
+
+    # ============================================================
+    # 🟢 SSH Terminal Web
+    # ============================================================
+
+    build-web:
+        if: github.event_name == 'push' || inputs.web == true
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Maximize build space
+              uses: easimon/maximize-build-space@v10
+              with:
+                  root-reserve-mb: 1024
+                  swap-size-mb: 1024
+                  remove-dotnet: "true"
+                  remove-haskell: "true"
+                  remove-android: "true"
+                  remove-codeql: "true"
+                  build-mount-path: "/var/lib/docker"
+
+            - name: Restart docker
+              run: sudo service docker restart
+
+            - name: Extra cleanup
+              run: |
+                  docker system prune -af || true
+                  docker buildx prune -af || true
+
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+              with:
+                  platforms: amd64,arm64
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Login to Aliyun ACR
+              run: |
+                  set -euo pipefail
+                  echo "$ALIYUN_REGISTRY_PASSWORD" | docker login \
+                    --username "$ALIYUN_REGISTRY_USER" \
+                    --password-stdin "$REGISTRY"
+
+            - name: Prepare image tags
+              id: prep-web
+              run: |
+                  set -euo pipefail
+                  IMAGE=${REGISTRY}/${NAMESPACE}/ssh-terminal-web
+                  VERSION=${GITHUB_REF_NAME}
+                  echo "image=$IMAGE" >> $GITHUB_OUTPUT
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            - name: Build and Push Web
+              run: |
+                  set -euo pipefail
+                  docker buildx build \
+                    --platform linux/amd64,linux/arm64 \
+                    --provenance=false \
+                    --cache-from=type=gha \
+                    --cache-to=type=gha,mode=max \
+                    -t ${{ steps.prep-web.outputs.image }}:${{ steps.prep-web.outputs.version }} \
+                    -t ${{ steps.prep-web.outputs.image }}:latest \
+                    --push \
+                    ./ssh-terminal-web
+
+    # ============================================================
+    # 🟢 SSH Terminal Docs
+    # ============================================================
+
+    build-docs:
+        if: github.event_name == 'push' || inputs.docs == true
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Maximize build space
+              uses: easimon/maximize-build-space@v10
+              with:
+                  root-reserve-mb: 1024
+                  swap-size-mb: 1024
+                  remove-dotnet: "true"
+                  remove-haskell: "true"
+                  remove-android: "true"
+                  remove-codeql: "true"
+                  build-mount-path: "/var/lib/docker"
+
+            - name: Restart docker
+              run: sudo service docker restart
+
+            - name: Extra cleanup
+              run: |
+                  docker system prune -af || true
+                  docker buildx prune -af || true
+
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+              with:
+                  platforms: amd64,arm64
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Login to Aliyun ACR
+              run: |
+                  set -euo pipefail
+                  echo "$ALIYUN_REGISTRY_PASSWORD" | docker login \
+                    --username "$ALIYUN_REGISTRY_USER" \
+                    --password-stdin "$REGISTRY"
+
+            - name: Prepare image tags
+              id: prep-docs
+              run: |
+                  set -euo pipefail
+                  IMAGE=${REGISTRY}/${NAMESPACE}/ssh-terminal-docs
+                  VERSION=${GITHUB_REF_NAME}
+                  echo "image=$IMAGE" >> $GITHUB_OUTPUT
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            - name: Build and Push Docs
+              run: |
+                  set -euo pipefail
+                  docker buildx build \
+                    --platform linux/amd64,linux/arm64 \
+                    --provenance=false \
+                    --cache-from=type=gha \
+                    --cache-to=type=gha,mode=max \
+                    -t ${{ steps.prep-docs.outputs.image }}:${{ steps.prep-docs.outputs.version }} \
+                    -t ${{ steps.prep-docs.outputs.image }}:latest \
+                    --push \
+                    ./ssh-terminal-docs
+
+    # ============================================================
+    # 🔔 通知
+    # ============================================================
+
+    notify:
+        name: Build Complete
+        if: always()
+        needs: [build-server, build-web, build-docs]
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Check results
+              run: |
+                  echo "Server: ${{ needs.build-server.result }}"
+                  echo "Web: ${{ needs.build-web.result }}"
+                  echo "Docs: ${{ needs.build-docs.result }}"

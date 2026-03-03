@@ -16,7 +16,11 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# 忽略所有实际的 .env 文件，只保留 .env.*.example
+.env.development
 .env.production
+.env.staging
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
