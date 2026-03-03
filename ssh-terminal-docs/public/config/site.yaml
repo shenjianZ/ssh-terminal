@@ -85,8 +85,6 @@ sidebar:
                   children:
                       - title: "更新日志"
                         path: "/docs/meta/changelog"
-                      - title: "路线图"
-                        path: "/docs/meta/roadmap"
                       - title: "许可证"
                         path: "/docs/meta/license"
 
@@ -139,7 +137,7 @@ footer:
         - title: "帮助支持"
           items:
               - title: "快速开始"
-                link: "/docs/quick-start"
+                link: "/docs/start/quick-start"
               - title: "源代码"
                 link: "https://github.com/shenjianZ/ssh-terminal"
                 external: true
@@ -180,16 +178,16 @@ contextMenu:
     page:
         copyUrl: true # 复制当前链接
         copyTitle: false # 复制页面标题
-        copyMarkdownLink: true # 复制 Markdown 链接
+        copyMarkdownLink: false # 复制 Markdown 链接
         openInNewTab: false # 在新标签页打开
         reload: true # 刷新
-        printPage: true # 打印页面
+        printPage: false # 打印页面
         scrollToTop: true # 回到顶部
         scrollToBottom: true # 滚动到底部
 
     # 站点组菜单项配置
     site:
-        goHome: true # 返回首页
+        goHome: false # 返回首页
         quickNav: false # 快速跳转
         language: false # 语言切换
 
