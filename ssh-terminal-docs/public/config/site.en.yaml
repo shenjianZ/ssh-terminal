@@ -156,16 +156,52 @@ footer:
         - title: "License"
           link: "/docs/meta/license"
     social:
+        - name: "email"
+          url: "mailto:contact@example.com"
+          icon: "mail"
         - name: "github"
-          url: "https://github.com/shenjianZ/ssh-terminal"
+          link: "https://github.com/shenjianZ/React-docs-ui"
           icon: "github"
+        # - name: "youtube"
+        #   url: "https://youtube.com/@yourhandle"
+        #   icon: "youtube"
+        # - name: "twitter"
+        #   url: "https://twitter.com/yourhandle"
+        #   icon: "twitter"
+        # - name: "discord"
+        #   url: "https://discord.gg/yourinvite"
+        #   icon: "discord"
+        # - name: "telegram"
+        #   url: "https://t.me/yourhandle"
+        #   icon: "telegram"
+        # - name: "tiktok"
+        #   url: "https://tiktok.com/@yourhandle"
+        #   icon: "tiktok"
+        - name: "bilibili"
+          url: "https://space.bilibili.com/your_bilibili_id"
+          icon: "bilibili"
+        - name: "qq"
+          url: "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=your_qq_id&card_type=person&source=qrcode"
+          icon: "qq"
+        - name: "wechat"
+          url: "weixin://dl/add?your_wechat_id"
+          icon: "wechat"
+        # - name: "weibo"
+        #   url: "https://weibo.com/yourhandle"
+        #   icon: "weibo"
+        # - name: "douyin"
+        #   url: "https://www.douyin.com/user/yourhandle"
+        #   icon: "douyin"
+        # - name: "zhihu"
+        #   url: "https://www.zhihu.com/people/yourhandle"
+        #   icon: "zhihu"
 
 # PWA Configuration
 pwa:
-    enabled: true
-    name: "SSH Terminal"
-    shortName: "SSHTerm"
-    description: "Cross-platform desktop SSH terminal management tool"
+    enabled: false
+    name: "React Docs UI"
+    shortName: "ReactDocsUI"
+    description: "Beautiful documentation websites made simple"
     themeColor: "#ffffff"
     backgroundColor: "#ffffff"
 
@@ -176,18 +212,19 @@ contextMenu:
 
     # Page group menu items configuration
     page:
+        copySelectedText: true # copy selected text
         copyUrl: true # Copy current URL
         copyTitle: false # Copy page title
-        copyMarkdownLink: false # Copy Markdown link
+        copyMarkdownLink: true # Copy Markdown link
         openInNewTab: false # Open in new tab
         reload: true # Refresh
-        printPage: false # Print page
+        printPage: true # Print page
         scrollToTop: true # Scroll to top
         scrollToBottom: true # Scroll to bottom
 
     # Site group menu items configuration
     site:
-        goHome: false # Go to home
+        goHome: true # Go to home
         quickNav: false # Quick navigation
         language: false # Language switch
 

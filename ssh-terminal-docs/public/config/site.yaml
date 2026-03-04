@@ -156,9 +156,45 @@ footer:
         - title: "License"
           link: "/meta/license"
     social:
+        - name: "email"
+          url: "mailto:contact@example.com"
+          icon: "mail"
         - name: "github"
-          url: "https://github.com/shenjianZ/ssh-terminal"
+          url: "https://github.com/your_github_id"
           icon: "github"
+        # - name: "youtube"
+        #   url: "https://youtube.com/@yourhandle"
+        #   icon: "youtube"
+        # - name: "twitter"
+        #   url: "https://twitter.com/yourhandle"
+        #   icon: "twitter"
+        # - name: "discord"
+        #   url: "https://discord.gg/yourinvite"
+        #   icon: "discord"
+        # - name: "telegram"
+        #   url: "https://t.me/yourhandle"
+        #   icon: "telegram"
+        # - name: "tiktok"
+        #   url: "https://tiktok.com/@yourhandle"
+        #   icon: "tiktok"
+        - name: "bilibili"
+          url: "https://space.bilibili.com/your_bilibili_id"
+          icon: "bilibili"
+        - name: "qq"
+          url: "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=your_qq_id&card_type=person&source=qrcode"
+          icon: "qq"
+        - name: "wechat"
+          url: "weixin://dl/add?your_wechat_id"
+          icon: "wechat"
+        # - name: "weibo"
+        #   url: "https://weibo.com/yourhandle"
+        #   icon: "weibo"
+        # - name: "douyin"
+        #   url: "https://www.douyin.com/user/yourhandle"
+        #   icon: "douyin"
+        # - name: "zhihu"
+        #   url: "https://www.zhihu.com/people/yourhandle"
+        #   icon: "zhihu"
 
 # PWA Configuration
 pwa:
@@ -176,18 +212,19 @@ contextMenu:
 
     # 页面组菜单项配置
     page:
+        copySelectedText: true # 复制选中的文字
         copyUrl: true # 复制当前链接
         copyTitle: false # 复制页面标题
         copyMarkdownLink: false # 复制 Markdown 链接
         openInNewTab: false # 在新标签页打开
         reload: true # 刷新
-        printPage: false # 打印页面
+        printPage: true # 打印页面
         scrollToTop: true # 回到顶部
         scrollToBottom: true # 滚动到底部
 
     # 站点组菜单项配置
     site:
-        goHome: false # 返回首页
+        goHome: true # 返回首页
         quickNav: false # 快速跳转
         language: false # 语言切换
 

@@ -1,24 +1,19 @@
-import path from "path"
-import tailwindcss from "@tailwindcss/vite"
+// @ts-nocheck
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
-import { nodePolyfills } from "vite-plugin-node-polyfills"
 
-// https://vite.dev/config/
 export default defineConfig({
-  appType: "spa",
-  plugins: [react(), tailwindcss(), nodePolyfills()],
-  publicDir: "public",
-  build: {
-    copyPublicDir: true,
-  },
+  plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": "src",
       buffer: "buffer/",
     },
   },
-  define: {
-    global: "globalThis",
+  server: {
+    host: "0.0.0.0",
+    port: 5173,
   },
 })
+
+
