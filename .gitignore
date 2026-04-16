@@ -53,3 +53,4 @@ bash.exe*
 .env
 .env.local
 .env.*.local
+_scaffolds

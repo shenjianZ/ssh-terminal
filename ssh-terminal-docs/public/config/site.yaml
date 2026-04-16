@@ -232,3 +232,10 @@ contextMenu:
     appearance:
         theme: false # 主题切换
         resetThemePref: false # 重置主题偏好
+# MDX 组件配置
+mdx:
+    componentsPath: "/src/components" # 组件扫描路径
+    enabled: true # 启用 MDX 支持
+
+ai:
+    enabled: false

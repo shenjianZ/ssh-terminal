@@ -1,1 +1,1 @@
-{"root":["./src/main.tsx","./src/react-docs-ui.d.ts","./src/vite-env.d.ts"],"version":"5.8.3"}
+{"root":["./src/main.tsx","./src/react-docs-ui.d.ts","./src/vite-env.d.ts","./src/components/alert.tsx","./src/components/badgelist.tsx","./src/components/callout.tsx","./src/components/feature.tsx","./src/components/mytip.tsx","./src/generated/mdx-components.ts"],"version":"5.8.3"}

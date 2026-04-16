@@ -1,10 +1,12 @@
 # SSH Terminal
 
-A powerful, modern **cross-platform desktop SSH terminal management tool** built with Tauri 2.0 + React 19 + Rust.
+<Callout variant="secondary">
+A powerful, modern cross-platform desktop SSH terminal management tool built with Tauri 2.0 + React 19 + Rust.
+SSH Terminal is dedicated to providing developers and operations personnel with a one-stop remote server management solution, integrating SSH terminal, AI intelligent assistant, SFTP file management, cloud sync, and other rich features.    
 
-SSH Terminal is dedicated to providing developers and operations personnel with a one-stop remote server management solution, integrating SSH terminal, AI intelligent assistant, SFTP file management, cloud sync, and other rich features.
+</Callout>
 
----
+___
 
 ## 🚀 Quick Start
 
@@ -44,7 +46,10 @@ SSH Terminal is dedicated to providing developers and operations personnel with 
 
 **System Requirements**: Ubuntu 22.04+ or glibc 2.34+
 
-> **⚠️ Important**: This package requires glibc 2.34 or higher.
+<Warning>
+    Important: This package requires glibc 2.34 or higher.
+</Warning>
+
 
 1. Visit the [GitHub Releases](https://github.com/shenjianZ/ssh-terminal/releases) page
 2. Download the latest Debian/Ubuntu package (`SSH.Terminal_vx.x.x-linux-x86_64.deb`)
@@ -67,7 +72,10 @@ sudo apt-get install -f
 
 **System Requirements**: glibc 2.35+
 
-> **⚠️ Important**: This package requires glibc 2.35 or higher.
+<Warning>
+    Important: This package requires glibc 2.35 or higher.
+</Warning>
+
 
 1. Visit the [GitHub Releases](https://github.com/shenjianZ/ssh-terminal/releases) page
 2. Download the latest Fedora/RHEL package (`SSH.Terminal_vx.x.x-linux-x86_64.rpm`)
